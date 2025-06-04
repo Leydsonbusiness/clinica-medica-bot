@@ -1,0 +1,194 @@
+#.\venv\Scripts\activate
+#python meu_bot.py
+
+#importar
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton #opções do menu
+from telegram.ext import (ApplicationBuilder,CommandHandler,MessageHandler,filters,ContextTypes,ConversationHandler)
+#import pandas as pd
+#import imageio.v3 as iio #receber fotos 
+#import PyPDF2 #receber pdf
+import re  #função para expressao regular 
+
+# Dicionários para armazenar os dados
+banco = {} #informações do usuário -> Firestore com Python
+
+cpf_solicitado, nome_solicitado, dataNasc_solicitada, genero_solicitado, telefone_solicitado, menu_principal = range(6) #etapas
+
+#Expressoes regulares
+def validar_cpf(cpf: str) -> bool:
+    if re.fullmatch(r'^\d{11}$', cpf):
+        return True
+    else:
+        return False
+
+def validar_nasc(data: str) -> bool:
+    return re.fullmatch(r'^(0[1-9]|[12][0-9]|3[01])/(0[1-9]|1[0-2])/[0-9]{4}$', data) is not None
+
+def validar_telefone(telefone: str) -> bool:
+    telefone_brasileiro = r'^\(?(\d{2})\)?\s?(\d{4,5})[-.\s]?(\d{4})$'
+    return re.fullmatch(telefone_brasileiro, telefone) is not None
+    
+#menu
+async def mostrar_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    keyboard = [
+         [KeyboardButton("Agendar consulta")],
+         [KeyboardButton("Consulta virtual")],
+         [KeyboardButton("Acompanhamento de tratamento")],
+         [KeyboardButton("Falar com Atendente")],
+         [KeyboardButton("Tirar dúvidas")]
+     ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+    await update.message.reply_text("Escolha uma das opções abaixo:", reply_markup=reply_markup)
+    return menu_principal
+
+# inicio do bot
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Olá, espero que esteja tendo um ótimo dia! Sou a assistente virtual de Dr. Heitor e estou a sua disposição para ajudar no que precisar.😊")#update envia mensagem de volta para o usuário
+    await update.message.reply_text("Para começarmos, me informe seu CPF, por favor.(Somente números)")
+    return cpf_solicitado
+
+async def identificar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    cpf_digitado = update.message.text.strip()
+
+    if validar_cpf(cpf_digitado):
+        context.user_data['cpf_temp'] = cpf_digitado
+        
+        if cpf_digitado in banco:
+            primeiro_nome = banco[cpf_digitado].get("nome").split()[0]
+            await update.message.reply_text(f"Olá {primeiro_nome}! Que bom te ver por aqui, em que posso lhe ajudar hoje?")
+            return await mostrar_menu(update, context)
+        else:
+            await update.message.reply_text("Para iniciarmos o atendimento preciso fazer um pequeno cadastro, vamos lá?")
+            await update.message.reply_text("Me informe seu *NOME COMPLETO*. [etapa 1/4]", parse_mode= 'Markdown')
+            return nome_solicitado
+    else: 
+        await update.message.reply_text(f"Ops! o CPF {cpf_digitado} é inválido. Digite apenas 11 números, por favor")
+        return cpf_solicitado
+
+async def receber_nome(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    nome_digitado = update.message.text.strip()
+    cpf = context.user_data.get('cpf_temp')
+
+    if cpf and cpf in banco: 
+        banco[cpf]["nome"] = nome_digitado 
+        await update.message.reply_text("Obrigada! Agora, me informe sua *DATA DE NASCIMENTO* no formato DD/MM/AAAA. [etapa 2/4]", parse_mode='Markdown')
+        return dataNasc_solicitada
+
+async def receber_data_nasc(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    data_digitada = update.message.text.strip()
+    cpf = context.user_data.get('cpf_temp')
+
+    if validar_nasc(data_digitada):
+        if cpf and cpf in banco:
+            banco[cpf]["data_nascimento"] = data_digitada
+            keyboard = [
+                [KeyboardButton("Masculino")],
+                [KeyboardButton("Feminino")],
+                [KeyboardButton("Transgênero")],
+                [KeyboardButton("Prefiro não informar")],
+            ]
+            reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+            await update.message.reply_text("Quase lá! Agora, me informe seu *GÊNERO*. [etapa 3/4]", reply_markup=reply_markup, parse_mode='Markdown')
+            return genero_solicitado
+    else:
+        await update.message.reply_text(f"Ops! A data {data_digitada} é inválida. Por favor, digite no formato DD/MM/AAAA.")
+        return dataNasc_solicitada
+
+async def receber_genero(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    genero_digitado = update.message.text.strip()
+    cpf = context.user_data.get('cpf_temp')
+
+    if cpf and cpf in banco:
+        banco[cpf]['genero'] = genero_digitado
+    await update.message.reply_text("E por último, = me informe seu *TELEFONE COM DDD*, por favor [Etapa 4/4]", parse_mode= 'markdown')
+    return telefone_solicitado
+
+async def receber_telefone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    telefone_digitado = update.message.text.strip()
+    cpf = context.user_data.get('cpf_temp')
+
+    if validar_telefone(telefone_digitado):
+        if cpf and cpf in banco:
+            banco[cpf]['telefone'] = telefone_digitado
+            del context.user_data['cpf_temp']
+
+            await update.message. reply_text(
+                f"Cadastro concluído com sucesso! ✅\n\n"
+                f"**CPF**: {cpf}\n"
+                f"**Nome**: {banco[cpf]['nome']}\n"
+                f"**Data de Nascimento**: {banco[cpf]['data_nascimento']}\n"
+                f"**Gênero**: {banco[cpf]['genero']}\n"
+                f"**Telefone**: {banco[cpf]['telefone']}",
+                parse_mode= 'Markdown' 
+            )
+            return await mostrar_menu(update, context)
+
+        else:
+            await update.message.reply_text(f"Ops! O telefone {telefone_digitado} é inválido. Por favor, digite como no seguinte exemplo:*84123456789*.", parse_mode= 'markdown')
+
+async def lidar_com_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    opçao = update.message.text
+
+    if opçao == "Agendar consulta":
+        await update.message.reply_text("Ok, para qual dia você prefere marcar sua consulta ?", reply_markup=reply_markup)
+        #--dias
+        await update.message.reply_text("para esse dia temos esses horários disponíveis")
+        #--horarios
+        await update.message.reply_text#("Perfeito! Deixarei sua consulta agendada para o dia {dia} às {hora} como você pediu. Até lá 😉)
+
+
+    elif opçao == "consulta virtual":
+        await update.message.reply_text("O que você deseja? ")
+        keyboard = [
+            [KeyboardButton("Agendar consulta virtual")],
+            [KeyboardButton("Como funciona a consulta virtual")],
+
+        ]
+    elif opçao == "Tirar dúvidas":
+        await update.message.reply_text("Qual seria sua Dúvida?")
+        keyboard = [
+         [KeyboardButton("Aceita plano de saúde?")],
+         [KeyboardButton("Horários de funcionamento")],
+         [KeyboardButton("Valores das consultas")],
+         [KeyboardButton("Retorno")],
+         [KeyboardButton("como é feita a consulta online")]
+        ]
+        if opçao == 'Aceita plano de saúde?':
+            await update.message.reply_text("Sim! Nós aceitamos plano de saúde, Nossa clinica")
+        if opçao == "Horários de funcionamento":
+            await update.message.reply_text()
+    else:
+        await update.message.reply_text("Opção inválida. Por favor, escolha uma opção do menu 😉")
+        return "tirar duvidas"
+    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+
+
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.message.reply_text("Atendimento cancelado. Digite /start se quiser começar novamente.")
+    return ConversationHandler.END
+
+
+#---- Faz o bot rodar ----
+async def main():
+    app = ApplicationBuilder().token("8070666768:AAHjN_idvRTTAvdTQNB31oyYYKrOAgiwj4").build()
+
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("start", start)],
+        states={
+            cpf_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, identificar_cadastro)],
+            nome_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_nome)],
+            dataNasc_solicitada: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_data_nasc)],
+            genero_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_genero)],
+            telefone_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_telefone)],
+            menu_principal: [MessageHandler(filters.TEXT & ~filters.COMMAND, lidar_com_menu)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
+
+    app.add_handler(conv_handler)
+
+    print("Bot rodando e aguardando mensagens no Telegram...")
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
+
+    if __name__ == '__main__':
+        main()
