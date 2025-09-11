@@ -1,20 +1,20 @@
 #.\venv\Scripts\activate
 #python meu_bot.py
 
-#importar
+#imports
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton #opções do menu
 from telegram.ext import (ApplicationBuilder,CommandHandler,MessageHandler,filters,ContextTypes,ConversationHandler)
+import re  #função para expressao regular 
 #import pandas as pd
 #import imageio.v3 as iio #receber fotos 
 #import PyPDF2 #receber pdf
-import re  #função para expressao regular 
 
 # Dicionários para armazenar os dados
 banco = {} #informações do usuário -> Firestore com Python
 
 cpf_solicitado, nome_solicitado, dataNasc_solicitada, genero_solicitado, telefone_solicitado, menu_principal = range(6) #etapas
 
-#Expressoes regulares
+#Expressoes regulares para validações
 def validar_cpf(cpf: str) -> bool:
     if re.fullmatch(r'^\d{11}$', cpf):
         return True
@@ -43,7 +43,7 @@ async def mostrar_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
 # inicio do bot
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Olá, espero que esteja tendo um ótimo dia! Sou a assistente virtual de Dr. Heitor e estou a sua disposição para ajudar no que precisar.😊")#update envia mensagem de volta para o usuário
+    await update.message.reply_text("Olá, espero que esteja tendo um ótimo dia! Sou a assistente virtual da clínica Dedyce Góes e estou a sua disposição para ajudar no que precisar.😊")#update envia mensagem de volta para o usuário
     await update.message.reply_text("Para começarmos, me informe seu CPF, por favor.(Somente números)")
     return cpf_solicitado
 
@@ -124,27 +124,36 @@ async def receber_telefone(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             return await mostrar_menu(update, context)
 
         else:
-            await update.message.reply_text(f"Ops! O telefone {telefone_digitado} é inválido. Por favor, digite como no seguinte exemplo:*84123456789*.", parse_mode= 'markdown')
+            await update.message.reply_text(f"Ops! O telefone {telefone_digitado} é inválido. Por favor, digite como no seguinte exemplo:*84123456789*.", parse_mode= 'Markdown')
 
 async def lidar_com_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    opçao = update.message.text
+    opcao = update.message.text
 
-    if opçao == "Agendar consulta":
-        await update.message.reply_text("Ok, para qual dia você prefere marcar sua consulta ?", reply_markup=reply_markup)
-        #--dias
-        await update.message.reply_text("para esse dia temos esses horários disponíveis")
-        #--horarios
+    if opcao == "Agendar consulta":
+        keyboard = [
+            [KeyboardButton("Segunda-feira")],
+            [KeyboardButton("Terça-feira")],
+            [KeyboardButton("Quarta-feira")],
+            [KeyboardButton("Quinta-feira")],
+            [KeyboardButton("Sexta-feira")],
+            [KeyboardButton("Sábado")],
+        ]
+        reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+        await update.message.reply_text("Ok, para qual dia você prefere marcar sua consulta?", reply_markup=reply_markup)
+
+        reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+        await update.message.reply_text("Ok, para qual dia você prefere marcar sua consulta?", reply_markup=reply_markup)
         await update.message.reply_text#("Perfeito! Deixarei sua consulta agendada para o dia {dia} às {hora} como você pediu. Até lá 😉)
 
 
-    elif opçao == "consulta virtual":
+    elif opcao == "consulta virtual":
         await update.message.reply_text("O que você deseja? ")
         keyboard = [
             [KeyboardButton("Agendar consulta virtual")],
-            [KeyboardButton("Como funciona a consulta virtual")],
-
+            [KeyboardButton("Como funciona a consulta virtual")]
         ]
-    elif opçao == "Tirar dúvidas":
+                   
+    elif opcao == "Tirar dúvidas":
         await update.message.reply_text("Qual seria sua Dúvida?")
         keyboard = [
          [KeyboardButton("Aceita plano de saúde?")],
@@ -153,10 +162,19 @@ async def lidar_com_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
          [KeyboardButton("Retorno")],
          [KeyboardButton("como é feita a consulta online")]
         ]
-        if opçao == 'Aceita plano de saúde?':
-            await update.message.reply_text("Sim! Nós aceitamos plano de saúde, Nossa clinica")
-        if opçao == "Horários de funcionamento":
-            await update.message.reply_text()
+        if opcao == 'Aceita plano de saúde?':
+            await update.message.reply_text("Sim! Nós aceitamos plano de saúde")
+        if opcao == "Horários de funcionamento":
+            await update.message.reply_text("Irei te enviar os horários, aproveite para vir nos fazer uma visita.")
+            await update.message.reply_text(
+                "Segunda-feira: 08:00 às 12:00 e das 14:00 às 18:00\n"
+                "Terça-feira: 08:00 às 12:00 e das 14:00 às 18:00\n"
+                "Quarta-feira: 08:00 às 12:00 e das 14:00 às 18:00\n"
+                "Quinta-feira: 08:00 às 12:00 e das 14:00 às 18:00\n"
+                "Sexta-feira: 08:00 às 12:00 e das 14:00 às 18:00\n"
+                "Sábado: 08:00 às 11:00\n"
+                "Domingo: Clinica fechados"
+            )
     else:
         await update.message.reply_text("Opção inválida. Por favor, escolha uma opção do menu 😉")
         return "tirar duvidas"
