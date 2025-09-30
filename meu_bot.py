@@ -2,17 +2,21 @@
 #python meu_bot.py
 
 #imports
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton #opções do menu
-from telegram.ext import (ApplicationBuilder,CommandHandler,MessageHandler,filters,ContextTypes,ConversationHandler)
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton #opções do menu e botão
+from telegram.ext import (ApplicationBuilder,CommandHandler,MessageHandler,filters,ContextTypes,ConversationHandler) # telebot
 import re  #função para expressao regular 
+import asyncio
 #import pandas as pd
 #import imageio.v3 as iio #receber fotos 
 #import PyPDF2 #receber pdf
 
-# Dicionários para armazenar os dados
-banco = {} #informações do usuário -> Firestore com Python
+menu_principal = range(1)
 
-cpf_solicitado, nome_solicitado, dataNasc_solicitada, genero_solicitado, telefone_solicitado, menu_principal = range(6) #etapas
+"""
+# Dicionários para armazenar os dados -->fazer com SQLite 
+banco = {} 
+
+cpf_solicitado, nome_solicitado, dataNasc_solicitada, genero_solicitado, telefone_solicitado, menu_principal = range(1) #etapas
 
 #Expressoes regulares para validações
 def validar_cpf(cpf: str) -> bool:
@@ -27,14 +31,15 @@ def validar_nasc(data: str) -> bool:
 def validar_telefone(telefone: str) -> bool:
     telefone_brasileiro = r'^\(?(\d{2})\)?\s?(\d{4,5})[-.\s]?(\d{4})$'
     return re.fullmatch(telefone_brasileiro, telefone) is not None
-    
+"""
+
 #menu
 async def mostrar_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     keyboard = [
          [KeyboardButton("Agendar consulta")],
          [KeyboardButton("Consulta virtual")],
          [KeyboardButton("Acompanhamento de tratamento")],
-         [KeyboardButton("Falar com Atendente")],
+         [KeyboardButton("Contatar Dr. Heitor diretamente")],
          [KeyboardButton("Tirar dúvidas")]
      ]
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
@@ -43,10 +48,13 @@ async def mostrar_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
 # inicio do bot
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Olá, espero que esteja tendo um ótimo dia! Sou a assistente virtual da clínica Dedyce Góes e estou a sua disposição para ajudar no que precisar.😊")#update envia mensagem de volta para o usuário
-    await update.message.reply_text("Para começarmos, me informe seu CPF, por favor.(Somente números)")
-    return cpf_solicitado
+    await update.message.reply_text("Olá, espero que esteja tendo um ótimo dia! Sou a assistente virtual do Dr. Heitor Góes e estou a sua disposição para ajudar no que precisar.😊")#update envia mensagem de volta para o usuário
+    return await mostrar_menu(update, context)
+    #await update.message.reply_text("Para começarmos, me informe seu CPF, por favor.(Somente números)")
+    #return cpf_solicitado
 
+# ---- CADASTRO ----
+""" 
 async def identificar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cpf_digitado = update.message.text.strip()
 
@@ -56,7 +64,7 @@ async def identificar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYP
         if cpf_digitado in banco:
             primeiro_nome = banco[cpf_digitado].get("nome").split()[0]
             await update.message.reply_text(f"Olá {primeiro_nome}! Que bom te ver por aqui, em que posso lhe ajudar hoje?")
-            return await mostrar_menu(update, context)
+            await mostrar_menu(update, context); return menu_principal
         else:
             await update.message.reply_text("Para iniciarmos o atendimento preciso fazer um pequeno cadastro, vamos lá?")
             await update.message.reply_text("Me informe seu *NOME COMPLETO*. [etapa 1/4]", parse_mode= 'Markdown')
@@ -121,12 +129,13 @@ async def receber_telefone(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 f"**Telefone**: {banco[cpf]['telefone']}",
                 parse_mode= 'Markdown' 
             )
-            return await mostrar_menu(update, context)
+            await mostrar_menu(update, context); 
 
         else:
             await update.message.reply_text(f"Ops! O telefone {telefone_digitado} é inválido. Por favor, digite como no seguinte exemplo:*84123456789*.", parse_mode= 'Markdown')
+"""
 
-async def lidar_com_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def menuopt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     opcao = update.message.text
 
     if opcao == "Agendar consulta":
@@ -140,17 +149,14 @@ async def lidar_com_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         ]
         reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
         await update.message.reply_text("Ok, para qual dia você prefere marcar sua consulta?", reply_markup=reply_markup)
-
-        reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
-        await update.message.reply_text("Ok, para qual dia você prefere marcar sua consulta?", reply_markup=reply_markup)
-        await update.message.reply_text#("Perfeito! Deixarei sua consulta agendada para o dia {dia} às {hora} como você pediu. Até lá 😉)
+        #await update.message.reply_text("Perfeito! Deixarei sua consulta agendada para o dia {dia} às {hora} como você pediu. Até lá 😉)
 
 
     elif opcao == "consulta virtual":
-        await update.message.reply_text("O que você deseja? ")
+        await update.message.reply_text("O que você deseja?")
         keyboard = [
             [KeyboardButton("Agendar consulta virtual")],
-            [KeyboardButton("Como funciona a consulta virtual")]
+            [KeyboardButton("Como funciona a consulta virtual?")]
         ]
                    
     elif opcao == "Tirar dúvidas":
@@ -173,7 +179,7 @@ async def lidar_com_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 "Quinta-feira: 08:00 às 12:00 e das 14:00 às 18:00\n"
                 "Sexta-feira: 08:00 às 12:00 e das 14:00 às 18:00\n"
                 "Sábado: 08:00 às 11:00\n"
-                "Domingo: Clinica fechados"
+                "Domingo: Não atendemos"
             )
     else:
         await update.message.reply_text("Opção inválida. Por favor, escolha uma opção do menu 😉")
@@ -186,27 +192,20 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return ConversationHandler.END
 
 
-#---- Faz o bot rodar ----
+# ---- Faz o bot rodar ----
 async def main():
-    app = ApplicationBuilder().token("8070666768:AAHjN_idvRTTAvdTQNB31oyYYKrOAgiwj4").build()
-
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("start", start)],
-        states={
-            cpf_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, identificar_cadastro)],
-            nome_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_nome)],
-            dataNasc_solicitada: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_data_nasc)],
-            genero_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_genero)],
-            telefone_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_telefone)],
-            menu_principal: [MessageHandler(filters.TEXT & ~filters.COMMAND, lidar_com_menu)],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-    )
-
-    app.add_handler(conv_handler)
-
-    print("Bot rodando e aguardando mensagens no Telegram...")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
-
     if __name__ == '__main__':
-        main()
+        app = ApplicationBuilder().token("").build()
+
+        conv_handler = ConversationHandler(
+            entry_points=[CommandHandler("start", start)],
+            states={
+                menu_principal: [MessageHandler(filters.TEXT & ~filters.COMMAND, menuopt)],
+            },
+            fallbacks=[CommandHandler("cancel", cancel)],
+        )
+
+        app.add_handler(conv_handler)
+
+        print("Bot rodando e aguardando mensagens no Telegram...")
+        app.run_polling(allowed_updates=Update.ALL_TYPES)
