@@ -48,7 +48,7 @@ async def mostrar_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
 # inicio do bot
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Olá, espero que esteja tendo um ótimo dia! Sou a assistente virtual do Dr. Heitor Góes e estou a sua disposição para ajudar no que precisar.😊")#update envia mensagem de volta para o usuário
+    await update.message.reply_text("Olá, espero que esteja tendo um ótimo dia! Sou Zara, a assistente virtual do Dr. Heitor Góes e estou a sua disposição para ajudar no que precisar.😊")#update envia mensagem de volta para o usuário
     return await mostrar_menu(update, context)
     #await update.message.reply_text("Para começarmos, me informe seu CPF, por favor.(Somente números)")
     #return cpf_solicitado
