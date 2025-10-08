@@ -25,7 +25,7 @@ async def mostrar_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 # --- START ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Olá, espero que esteja tendo um ótimo dia! Me chamo Zara, sou a assistente virtual do Dr. Heitor Góes e estou à sua disposição para ajudar no que precisar. 😊"
+        "Olá, espero que esteja tendo um ótimo dia! Me chamo Zara, sou a assistente virtual do Dr. Heitor Góes e estou à sua disposição para ajudar no que precisar. 😊"  
     )
     return await mostrar_menu(update, context)
 
@@ -48,7 +48,7 @@ async def menuopt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         return Agendar_consu
     
     elif opcao == "Conheça quem é Dr. Heitor Góes":
-        await update.message.reply_text("O Dr. Heitor Góes é médico clínico geral, formado em 2023, e desde então tem se dedicado a oferecer um atendimento próximo e de confiança. Sua atuação é voltada para entender o paciente como um todo, valorizando a escuta atenta e buscando soluções práticas para cada situação")
+        await update.message.reply_text("O Dr. Heitor Góes é médico clínico geral, formado em 2022, e desde então tem se dedicado a oferecer um atendimento próximo e de confiança. Sua atuação é voltada para entender o paciente como um todo, valorizando a escuta atenta e buscando soluções práticas para cada situação")
         return Menu_principal
 
     elif opcao == "Consulta virtual":
@@ -80,6 +80,10 @@ async def menuopt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
         await update.message.reply_text("Qual seria sua dúvida?", reply_markup=reply_markup)
         return Duvidas
+    
+    elif opcao == "Finalizar atendimento":
+        await update.message.reply_text("Obrigado pelo contato! 😊 Se precisar de algo mais, é só me chamar. Cuide-se! 💙")
+        return ConversationHandler.END
 
     else:
         await update.message.reply_text("Opção inválida. Por favor, escolha uma opção do menu 😉")
@@ -87,34 +91,33 @@ async def menuopt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 # --- Processar agendamento ---
 async def processar_agendamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    opcao = update.message.text
     dia = update.message.text
 
-    if dia == "Voltar ao menu":
+    if opcao == "Voltar ao menu":
         await update.message.reply_text("Ok")
         return await mostrar_menu(update, context)
-    
+
     await update.message.reply_text(
         f"Ótimo! Você escolheu {dia}. Em breve entraremos em contato para confirmar os horários disponíveis"
     )
-    return Menu_principal
+    return await mostrar_menu(update, context)
 
 # --- Processar consulta virtual ---
 async def processar_consv(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     opcao = update.message.text
 
     if opcao == "Voltar ao menu":
+        await update.message.reply_text("Ok")
         return await mostrar_menu(update, context)
 
     if opcao == "Agendar consulta virtual":
-        await update.message.reply_text(
-            "Para agendar sua consulta virtual, por favor entre em contato pelo telefone (XX) XXXXX-XXXX.\n\n"
-            "Digite /menu para voltar ao menu principal."
-        )
+        return await menuopt(update, context)
+    
     elif opcao == "Como funciona a consulta virtual?":
         await update.message.reply_text(
             "A consulta virtual é realizada por videochamada, com a mesma qualidade de atendimento presencial.\n"
-            "Você receberá um link de acesso no horário agendado.\n\n"
-            "Digite /menu para voltar ao menu principal."
+            "Você receberá um link de acesso no horário agendado."
         )
     else:
         await update.message.reply_text("Opção inválida. Por favor, escolha uma opção do menu.")
@@ -125,34 +128,28 @@ async def processar_consv(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 # --- processar duvidas ---
 async def processar_duvidas(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     opcao = update.message.text
-
-    if opcao == "voltar ao menu":
-        return await mostrar_menu(update, context)
     
     respostas = {
         "Aceita plano de saúde?": "Sim, aceitamos os principais planos de saúde. Entre em contato para confirmar se aceitamos o seu.",
-        "Horários de funcionamento": "Atendemos de Segunda a Sexta, das 8h às 18h, e aos Sábados das 8h às 12h.",
+        "Horários de funcionamento": "Atendemos de Segunda a Sexta, das 08h às 18h, e aos Sábados das 08h às 12h.",
         "Valores das consultas": "Os valores variam de acordo com o tipo de consulta. Entre em contato para mais informações.",
-        "Retorno": "Consultas de retorno têm valor diferenciado quando realizadas em até 30 dias após a consulta inicial.",
-        "Como é feita a consulta online": "A consulta online é feita por videochamada através de plataforma segura. Você receberá o link no momento do agendamento."
+        "O valor da consulta é com retorno?": "Consultas de retorno têm valor diferenciado quando realizadas em até 30 dias após a consulta inicial.",
+        "Como é feita a consulta virtual": "A consulta virtual é feita por videochamada através de plataforma segura. Você receberá o link no momento do agendamento.",
+        "Voltar ao menu": "Ok"
     }
-
     if opcao in respostas:
-        await update.message.reply_text(f"{respostas[opcao]}\n\nDigite /menu para voltar ao menu principal.")
+        await update.message.reply_text(f"{respostas[opcao]}")
+        if opcao == "Voltar ao menu":
+            return await mostrar_menu(update, context)
+    
     else:
         await update.message.reply_text("Opção inválida. Por favor, escolha uma opção do menu.")
         return Duvidas
-
-    return Menu_principal
+    return Duvidas
     
 # --- Comando menu ---
 async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return await mostrar_menu(update, context)
-
-# --- CANCEL ---
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.message.reply_text("Tudo certo por hoje! 🩺 Estou à disposição para qualquer dúvida ou nova consulta. Cuide-se!")
-    return ConversationHandler.END
 
 # --- RODAR BOT ---
 def main():
@@ -166,9 +163,7 @@ def main():
             Consulta_virtual: [MessageHandler(filters.TEXT & ~filters.COMMAND, processar_consv)],
             Duvidas: [MessageHandler(filters.TEXT & ~filters.COMMAND, processar_duvidas)]
         },
-        fallbacks=[CommandHandler("cancel", cancel),
-        CommandHandler("menu", menu_command)
-        ]
+        fallbacks=[CommandHandler("menu", menu_command)]
     )
 
     app.add_handler(conv_handler)
