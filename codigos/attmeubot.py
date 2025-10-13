@@ -1,9 +1,21 @@
 #.\venv\Scripts\activate
 #python meu_bot.py
 
+#imports
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
+#Banco de dados
+import sqlite3
+from database import criar_tabela, inserir_paciente
+
+criar_tabela()
+
+inserir_paciente ("Leydson Douglas", "11962055400", "04-05-2006", "masculino", "(84)991612105" "2025-10-10")
+
+print("paciente adicionado com sucesso")
+
+#estados de conversação
 Menu_principal = 1
 Agendar_consu = 2
 Consulta_virtual = 3
