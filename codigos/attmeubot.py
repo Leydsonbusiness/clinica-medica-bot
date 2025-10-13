@@ -8,11 +8,19 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 #Banco de dados
 import sqlite3
 from database import criar_tabela, inserir_paciente
+from datetime import datetime
 
 criar_tabela()
 
-inserir_paciente ("Leydson Douglas", "11962055400", "04-05-2006", "masculino", "(84)991612105" "2025-10-10")
-
+inserir_paciente (
+    nome= "Leydson Douglas Góes de Araújo Praseres",
+    cpf= "11962055400",
+    data_nasc= "04-05-2006",
+    genero= "masculino",
+    telefone= "84991612105",
+    idade= "19",
+    data_cadastro="13-10-2025"
+    )
 print("paciente adicionado com sucesso")
 
 #estados de conversação
