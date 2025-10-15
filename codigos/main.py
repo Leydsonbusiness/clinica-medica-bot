@@ -28,7 +28,7 @@ def validar_cpf(cpf: str) -> bool:
 def validar_nasc(data: str) -> bool:
     return re.fullmatch(r'^(0[1-9]|[12][0-9]|3[01])/(0[1-9]|1[0-2])/[0-9]{4}$', data) is not None
 
-def validar_telefone(telefone: str) -> bool:
+def validar_telefone(telefon e: str) -> bool:
     telefone_brasileiro = r'^\(?(\d{2})\)?\s?(\d{4,5})[-.\s]?(\d{4})$'
     return re.fullmatch(telefone_brasileiro, telefone) is not None
 """

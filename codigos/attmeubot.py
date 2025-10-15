@@ -4,30 +4,70 @@
 #imports
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
+import re
 
 #Banco de dados
 import sqlite3
-from database import criar_tabela, inserir_paciente
-from datetime import datetime
-
-criar_tabela()
-
-inserir_paciente (
-    nome= "Leydson Douglas Góes de Araújo Praseres",
-    cpf= "11962055400",
-    data_nasc= "04-05-2006",
-    genero= "masculino",
-    telefone= "84991612105",
-    idade= "19",
-    data_cadastro="13-10-2025"
-    )
-print("paciente adicionado com sucesso")
+from database import criar_tabela, inserir_paciente, identificar_cpf
 
 #estados de conversação
-Menu_principal = 1
-Agendar_consu = 2
-Consulta_virtual = 3
-Duvidas = 4
+identificar_cadastro = 1
+Menu_principal = 2
+Agendar_consu = 3
+Consulta_virtual = 4
+Duvidas = 5
+
+#Expressoes regulares para validações
+def validar_cpf(cpf: str) -> bool:
+    cpf = re.sub(r'\D', '', cpf) 
+    return bool(re.fullmatch(r'\d{11}', cpf))
+
+def validar_nasc(data_nasc: str) -> bool:
+    return re.fullmatch(r'^(0[1-9]|[12][0-9]|3[01])/(0[1-9]|1[0-2])/[0-9]{4}$', data_nasc) is not None
+
+#calcular idade
+
+def validar_telefone(telefone: str) -> bool:
+    telefone_brasileiro = r'^\(?(\d{2})\)?\s?(\d{4,5})[-.\s]?(\d{4})$'
+    return re.fullmatch(telefone_brasileiro, telefone) is not None
+
+bd_temp = {
+    "nome": None,
+    "cpf": None,
+    "data_nasc": None,
+    "genero": None,
+    "telefone": None,
+    "idade": None,
+    "doencas": None,
+    "remedios": None,
+    "alergias": None,
+}
+cpf_solicitado, nome_solicitado, data_nasc_solicitada, genero_solicitado, doencas_solicitado, remedios_solicitado, alergias_solicitado = range(7)
+
+# --- CADASTRO --
+async def identificar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    cpf_digitado = update.message.text.strip()
+    
+    if validar_cpf(cpf_digitado): 
+        context.user_data['cpf'] = cpf_digitado
+
+        paciente = identificar_cpf(cpf_digitado)
+        if paciente:
+            nome_completo = paciente[0][1]
+            primeiro_nome = nome_completo.split()[0]
+            await update.message.reply_text (
+                f"Que bom te ver por aqui,{primeiro_nome}! Em que posso lhe ajudar hoje?")
+            return await mostrar_menu(update,context)
+        else:
+            await update.message.reply_text ("para iniciarmos o atendimento, só precisp fazer um pequeno cadastro, vamos lá?👇")
+            await update.message.reply_text ("Me informe seu *NOME COMPLETO*. [etapa 1/6]", parse_mode= 'Markdown')
+            return nome_solicitado
+    else: 
+        await update.message.reply_text (f"Ops! o CPF {cpf_digitado} é inválido. Digite apenas 11 números, por favor.")
+        return cpf_solicitado
+            
+
+
 
 # --- MENU ---
 async def mostrar_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -45,9 +85,16 @@ async def mostrar_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 # --- START ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Olá, espero que esteja tendo um ótimo dia! Me chamo Zara, sou a assistente virtual do Dr. Heitor Góes e estou à sua disposição para ajudar no que precisar. 😊"  
+        f"Olá! seja muito bem vindo! Espero que esteja tendo um ótimo dia! Me chamo Zara, sou a assistente virtual do Dr. Heitor Góes e estou à sua disposição para ajudar no que precisar. 😊"  
     )
-    return await mostrar_menu(update, context)
+    await update.message.reply_text("Para iniciarmos preciso que me informe seu CPF, por favor.")
+    keyboard = [
+        [KeyboardButton("Entrar")],
+        [KeyboardButton("Entrar sem cadastro")],
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+    await update.message.reply_text("Ou se preferir, poderá ter acesso sem cadatro, mas será com funções limitadas. O que você deseja?", reply_markup=reply_markup)
+
 
 # --- RESPOSTAS ---
 async def menuopt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:

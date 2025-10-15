@@ -1,4 +1,4 @@
-#base de dados SQLite 
+#banco de dados SQLite 
 import sqlite3
 
 def conectar():
@@ -10,24 +10,38 @@ def criar_tabela():
     cursor.execute("""
 CREATE TABLE IF NOT EXISTS pacientes(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nome varchar(100) TEXT NOT NULL,
-    cpf varchar(19) TEXT UNIQUE NOT NULL,
+    nome TEXT NOT NULL,
+    cpf VARCHAR(11) UNIQUE NOT NULL,
     data_nasc TEXT NOT NULL,
     genero TEXT,
     telefone TEXT,
-    idade INTEGER
-    data_cadastro TIMESTAMP DEFAUT CURRENT_TIMESTAMP,
-)  
+    idade INTEGER,
+    doencas TEXT,
+    remedios TEXT,
+    alergias TEXT,
+    data_cadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 """)
     conn.commit()
     conn.close()
 
-def inserir_paciente(nome, cpf, data_nasc, genero, telefone, idade, data_cadastro):
+def inserir_paciente(nome, cpf, data_nasc, genero, telefone, idade, doencas, remedios, alergias):
     conn = conectar()
     cursor = conn.cursor()
     cursor.execute("""
-    INSERT INTO pacientes (nome, cpf, data_nasc, genero, telefone, idade, data_cadastro)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-""", (nome, cpf, data_nasc, genero, telefone, idade, data_cadastro))
+    INSERT INTO pacientes (nome, cpf, data_nasc, genero, telefone, idade, doencas, remedios, alergias)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+""", (nome, cpf, data_nasc, genero, telefone, idade, doencas, remedios, alergias))
+    
     conn.commit()
     conn.close()
+
+def identificar_cpf(cpf):
+    conn = conectar()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM pacientes WHERE cpf = ?", (cpf,))
+    pacientes = cursor.fetchall()
+
+    conn.close()
+    return pacientes
