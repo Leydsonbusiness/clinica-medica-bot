@@ -5,6 +5,7 @@
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 import re
+import datetime
 
 #Banco de dados
 import sqlite3
@@ -22,7 +23,7 @@ def validar_cpf(cpf: str) -> bool:
     cpf = re.sub(r'\D', '', cpf) 
     return bool(re.fullmatch(r'\d{11}', cpf))
 
-def validar_nasc(data_nasc: str) -> bool:
+def validar_data_nasc(data_nasc: str) -> bool:
     return re.fullmatch(r'^(0[1-9]|[12][0-9]|3[01])/(0[1-9]|1[0-2])/[0-9]{4}$', data_nasc) is not None
 
 #calcular idade
@@ -42,16 +43,17 @@ bd_temp = {
     "remedios": None,
     "alergias": None,
 }
-cpf_solicitado, nome_solicitado, data_nasc_solicitada, genero_solicitado, doencas_solicitado, remedios_solicitado, alergias_solicitado = range(7)
 
 # --- CADASTRO --
-async def identificar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    cpf_digitado = update.message.text.strip()
-    
-    if validar_cpf(cpf_digitado): 
-        context.user_data['cpf'] = cpf_digitado
 
-        paciente = identificar_cpf(cpf_digitado)
+cpf_solicitado, nome_solicitado, data_nasc_solicitada, genero_solicitado, doencas_solicitado, remedios_solicitado, alergias_solicitado = range(7)
+
+async def identificar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    cpf = update.message.text.strip()
+    
+    if validar_cpf(cpf): 
+        paciente = identificar_cpf(cpf)
+
         if paciente:
             nome_completo = paciente[0][1]
             primeiro_nome = nome_completo.split()[0]
@@ -59,15 +61,41 @@ async def identificar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYP
                 f"Que bom te ver por aqui,{primeiro_nome}! Em que posso lhe ajudar hoje?")
             return await mostrar_menu(update,context)
         else:
-            await update.message.reply_text ("para iniciarmos o atendimento, só precisp fazer um pequeno cadastro, vamos lá?👇")
-            await update.message.reply_text ("Me informe seu *NOME COMPLETO*. [etapa 1/6]", parse_mode= 'Markdown')
+            bd_temp["cpf"] = cpf
+
+            await update.message.reply_text ("Notei que você não possui cadastro, você vai precisar responder só algumas perguntinhas, vamos lá?😄")
+            await update.message.reply_text ("Me informe seu *NOME COMPLETO*. [etapa 2/6]", parse_mode= 'Markdown')
             return nome_solicitado
     else: 
-        await update.message.reply_text (f"Ops! o CPF {cpf_digitado} é inválido. Digite apenas 11 números, por favor.")
+        await update.message.reply_text (f"Ops! o CPF {cpf} é inválido. Digite apenas 11 números, por favor.")
         return cpf_solicitado
+
+async def receber_nome(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    nome = update.message.text.strip()
+
+    bd_temp["nome"] = nome
+    await update.message.reply_text ("Perfeito, acabei de anotar aqui. Agora me diga qual a sua *data de nascimento*. [Etapa 3/6]", parse_mode= 'Markdown')
+    return nome_solicitado
+
+async def receber_data_nasc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    data_nasc = update.message.text.strip()
+
+    if validar_data_nasc(data_nasc):
+        data_nasc_date = datetime.strptime(data_nasc, "%d/%m/%Y").date()
+        hoje = datetime.date.today()
+
+        idade = hoje.year - data_nasc_date.year - ((hoje.month, hoje.day) < (data_nasc_date.month, data_nasc_date.day))
+        
+        bd_temp["data_nasc"] = data_nasc_date
+        bd_temp["idade"] = idade
+
+        await update.message.reply_text (f"Entendi, você tem {idade} anos, certo? Agora preciso que você me informe seu *GÊNERO*. [Etapa 4/6]", parse_mode= 'Markdown')
+        return genero_solicitado
+    
+    else:
+        await update.message.reply_text("Ops, data inválida! Digite no formato DD/MM/AAAA (Lembre-se de colocar as barras)")
+        return data_nasc_solicitada
             
-
-
 
 # --- MENU ---
 async def mostrar_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -84,8 +112,9 @@ async def mostrar_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
 # --- START ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
     await update.message.reply_text(
-        f"Olá! seja muito bem vindo! Espero que esteja tendo um ótimo dia! Me chamo Zara, sou a assistente virtual do Dr. Heitor Góes e estou à sua disposição para ajudar no que precisar. 😊"  
+        f"Olá, seja muito bem vindo! Espero que esteja tendo um ótimo dia! Me chamo Zara, sou a assistente virtual do Dr. Heitor Góes e estou à sua disposição para ajudar no que precisar. 😊"  
     )
     await update.message.reply_text("Para iniciarmos preciso que me informe seu CPF, por favor.")
     keyboard = [
@@ -94,9 +123,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     await update.message.reply_text("Ou se preferir, poderá ter acesso sem cadatro, mas será com funções limitadas. O que você deseja?", reply_markup=reply_markup)
+    return identificar_cadastro
 
+# --- PROCESSAR ENTRADA ---
+async def entrada(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    opcao = update.message.text
 
-# --- RESPOSTAS ---
+    if opcao == "Entrar":
+        await update.message.reply_text("Certo, agora me informe seu CPF, por favor")
+        return await identificar_cadastro(update, context)
+    
+    elif opcao == "Entrar sem cadastro":
+        await update.message.reply_text("Em que posso te ajudar hoje?")
+        return await mostrar_menu(update, context)
+    
+    else:
+        await update.message.reply_text("Opção inválida! Escolha uma das opções abaixo, por favor")
+        return await entrada(update, context)
+
+# --- PROCESSAR MENU PRINCIPAL ---
 async def menuopt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     opcao = update.message.text
 
