@@ -2,139 +2,242 @@
 #python meu_bot.py
 
 #imports
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton #opções do menu e botão
-from telegram.ext import (ApplicationBuilder,CommandHandler,MessageHandler,filters,ContextTypes,ConversationHandler) # telebot
-import re  #função para expressao regular 
-import asyncio
-#import pandas as pd
-#import imageio.v3 as iio #receber fotos 
-#import PyPDF2 #receber pdf
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
+import re
+from datetime import datetime, date
 
-menu_principal = range(1)
+#Banco de dados
+import sqlite3
+from database import criar_tabela, inserir_paciente, identificar_cpf
 
-"""
-# Dicionários para armazenar os dados -->fazer com SQLite 
-banco = {} 
-
-cpf_solicitado, nome_solicitado, dataNasc_solicitada, genero_solicitado, telefone_solicitado, menu_principal = range(1) #etapas
+#estados de conversação
+identificar_cadastro = 1
+Menu_principal = 2
+Agendar_consu = 3
+Consulta_virtual = 4
+Duvidas = 5
 
 #Expressoes regulares para validações
 def validar_cpf(cpf: str) -> bool:
-    if re.fullmatch(r'^\d{11}$', cpf):
-        return True
-    else:
-        return False
+    cpf = re.sub(r'\D', '', cpf) 
+    return bool(re.fullmatch(r'\d{11}', cpf))
 
-def validar_nasc(data: str) -> bool:
-    return re.fullmatch(r'^(0[1-9]|[12][0-9]|3[01])/(0[1-9]|1[0-2])/[0-9]{4}$', data) is not None
+def validar_data_nasc(data_nasc: str) -> bool:
+    return re.fullmatch(r'^(0[1-9]|[12][0-9]|3[01])/(0[1-9]|1[0-2])/[0-9]{4}$', data_nasc) is not None
 
-def validar_telefone(telefon e: str) -> bool:
+def validar_telefone(telefone: str) -> bool:
     telefone_brasileiro = r'^\(?(\d{2})\)?\s?(\d{4,5})[-.\s]?(\d{4})$'
     return re.fullmatch(telefone_brasileiro, telefone) is not None
-"""
 
-#menu
-async def mostrar_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    keyboard = [
-         [KeyboardButton("Agendar consulta")],
-         [KeyboardButton("Consulta virtual")],
-         [KeyboardButton("Acompanhamento de tratamento")],
-         [KeyboardButton("Contatar Dr. Heitor diretamente")],
-         [KeyboardButton("Tirar dúvidas")]
-     ]
-    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
-    await update.message.reply_text("Escolha uma das opções abaixo:", reply_markup=reply_markup)
-    return menu_principal
+bd_temp = {
+    "nome": None,
+    "cpf": None,
+    "data_nasc": None,
+    "genero": None,
+    "telefone": None,
+    "idade": None,
+    "doencas": None,
+    "remedios": None,
+    "alergias": None,
+}
 
-# inicio do bot
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Olá, espero que esteja tendo um ótimo dia! Sou Zara, a assistente virtual do Dr. Heitor Góes e estou a sua disposição para ajudar no que precisar.😊")#update envia mensagem de volta para o usuário
-    return await mostrar_menu(update, context)
-    #await update.message.reply_text("Para começarmos, me informe seu CPF, por favor.(Somente números)")
-    #return cpf_solicitado
+# --- CADASTRO --
 
-# ---- CADASTRO ----
-""" 
+cpf_solicitado, nome_solicitado, data_nasc_solicitada, genero_solicitado, telefone_solicitado, perguntas_opcionais, doencas_solicitado, remedios_solicitado, alergias_solicitado, identificar_cadastro, Menu_principal, Agendar_consu, Consulta_virtual, Duvidas = range(14)
+
 async def identificar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    cpf_digitado = update.message.text.strip()
+    cpf = update.message.text.strip()
+    
+    if validar_cpf(cpf): 
+        paciente = identificar_cpf(cpf)
 
-    if validar_cpf(cpf_digitado):
-        context.user_data['cpf_temp'] = cpf_digitado
-        
-        if cpf_digitado in banco:
-            primeiro_nome = banco[cpf_digitado].get("nome").split()[0]
-            await update.message.reply_text(f"Olá {primeiro_nome}! Que bom te ver por aqui, em que posso lhe ajudar hoje?")
-            await mostrar_menu(update, context); return menu_principal
+        if paciente:
+            nome_completo = paciente[0][1]
+            primeiro_nome = nome_completo.split()[0]
+            await update.message.reply_text (
+                f"Que bom te ver por aqui,{primeiro_nome}! Em que posso lhe ajudar hoje?")
+            return await mostrar_menu(update,context)
         else:
-            await update.message.reply_text("Para iniciarmos o atendimento preciso fazer um pequeno cadastro, vamos lá?")
-            await update.message.reply_text("Me informe seu *NOME COMPLETO*. [etapa 1/4]", parse_mode= 'Markdown')
+            bd_temp["cpf"] = cpf
+
+            await update.message.reply_text ("Notei que você não possui cadastro, você vai precisar responder só algumas perguntinhas, vamos lá?😄")
+            await update.message.reply_text ("Me informe seu *NOME COMPLETO*. [etapa 2/6]", parse_mode= 'Markdown')
             return nome_solicitado
     else: 
-        await update.message.reply_text(f"Ops! o CPF {cpf_digitado} é inválido. Digite apenas 11 números, por favor")
+        await update.message.reply_text (f"Ops! o CPF {cpf} é inválido. Digite apenas 11 números, por favor.")
         return cpf_solicitado
 
-async def receber_nome(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    nome_digitado = update.message.text.strip()
-    cpf = context.user_data.get('cpf_temp')
+async def receber_nome(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    nome = update.message.text.strip()
 
-    if cpf and cpf in banco: 
-        banco[cpf]["nome"] = nome_digitado 
-        await update.message.reply_text("Obrigada! Agora, me informe sua *DATA DE NASCIMENTO* no formato DD/MM/AAAA. [etapa 2/4]", parse_mode='Markdown')
-        return dataNasc_solicitada
+    bd_temp["nome"] = nome
+    await update.message.reply_text ("Perfeito, acabei de anotar aqui. Agora me diga qual a sua *DATA DE NASCIMENTO*. [Etapa 3/6]", parse_mode= 'Markdown')
+    return data_nasc_solicitada
 
-async def receber_data_nasc(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    data_digitada = update.message.text.strip()
-    cpf = context.user_data.get('cpf_temp')
+async def receber_data_nasc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    data_nasc = update.message.text.strip()
 
-    if validar_nasc(data_digitada):
-        if cpf and cpf in banco:
-            banco[cpf]["data_nascimento"] = data_digitada
-            keyboard = [
-                [KeyboardButton("Masculino")],
-                [KeyboardButton("Feminino")],
-                [KeyboardButton("Transgênero")],
-                [KeyboardButton("Prefiro não informar")],
-            ]
-            reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
-            await update.message.reply_text("Quase lá! Agora, me informe seu *GÊNERO*. [etapa 3/4]", reply_markup=reply_markup, parse_mode='Markdown')
-            return genero_solicitado
+    if validar_data_nasc(data_nasc):
+        data_nasc_date = datetime.strptime(data_nasc, "%d/%m/%Y").date()
+        hoje = datetime.date.today()
+
+        idade = hoje.year - data_nasc_date.year - ((hoje.month, hoje.day) < (data_nasc_date.month, data_nasc_date.day))
+        
+        bd_temp["data_nasc"] = data_nasc_date
+        bd_temp["idade"] = idade
+
+        await update.message.reply_text (f"Entendi, você tem {idade} anos, certo? Agora preciso que você me informe seu *GÊNERO*. [Etapa 4/6]", parse_mode= 'Markdown')
+        return genero_solicitado
+    
     else:
-        await update.message.reply_text(f"Ops! A data {data_digitada} é inválida. Por favor, digite no formato DD/MM/AAAA.")
-        return dataNasc_solicitada
+        await update.message.reply_text("Ops, data inválida! Digite no formato DD/MM/AAAA (Lembre-se de colocar as barras)")
+        return data_nasc_solicitada
+    
+async def receber_genero(update: Update,context: ContextTypes.DEFAULT_TYPE) -> int:
+    opcao = update.message.text
+    keyboard = [
+        [KeyboardButton("Masculino")],
+        [KeyboardButton("Feminino")],
+        [KeyboardButton("Outro")],
+        [KeyboardButton("Prefiro não responder")]
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+    await update.message.reply_text("Com qual opção você mais se identifica?",reply_markup=reply_markup)
 
-async def receber_genero(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    genero_digitado = update.message.text.strip()
-    cpf = context.user_data.get('cpf_temp')
+    if opcao == "Masculino":
+        bd_temp["genero"] = "genero"
+        await update.message.reply_text ("Está quase terminando, agora me informe seu *NÚMERO DE TELEFONE*. [Etapa 5/6]", parse_mode= "Markdown")
+        return telefone_solicitado
 
-    if cpf and cpf in banco:
-        banco[cpf]['genero'] = genero_digitado
-    await update.message.reply_text("E por último, = me informe seu *TELEFONE COM DDD*, por favor [Etapa 4/4]", parse_mode= 'markdown')
-    return telefone_solicitado
+    elif opcao == "Feminino":
+        bd_temp["genero"] = "genero"
+        await update.message.reply_text ("Está quase terminando, agora me informe seu *NÚMERO DE TELEFONE*. [Etapa 5/6]", parse_mode= "Markdown")
+        return telefone_solicitado
+    
+    elif opcao == "Outro":
+        await update.message.reply_text("Com qual gênero você se identifica?")
+        genero = update.message.text.strip()
+        bd_temp["genero"] = genero
+        await update.message.reply_text ("Está quase terminando, agora me informe seu *NÚMERO DE TELEFONE*. [Etapa 5/6]", parse_mode= "Markdown")
+        return telefone_solicitado
 
-async def receber_telefone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    telefone_digitado = update.message.text.strip()
-    cpf = context.user_data.get('cpf_temp')
+    elif opcao == "Prefiro não responder":
+        bd_temp["genero"] = "genero"
+        await update.message.reply_text ("Está quase terminando, agora me informe seu *NÚMERO DE TELEFONE*. [Etapa 5/6]", parse_mode= "Markdown")
+        return telefone_solicitado
 
-    if validar_telefone(telefone_digitado):
-        if cpf and cpf in banco:
-            banco[cpf]['telefone'] = telefone_digitado
-            del context.user_data['cpf_temp']
+    else:
+        await update.message.reply_text("Opção inválida! Escolha uma das opções abaixo, por favor")
+        return receber_genero
+    
+async def receber_telefone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    telefone = update.message.text.strip()
 
-            await update.message. reply_text(
-                f"Cadastro concluído com sucesso! ✅\n\n"
-                f"**CPF**: {cpf}\n"
-                f"**Nome**: {banco[cpf]['nome']}\n"
-                f"**Data de Nascimento**: {banco[cpf]['data_nascimento']}\n"
-                f"**Gênero**: {banco[cpf]['genero']}\n"
-                f"**Telefone**: {banco[cpf]['telefone']}",
-                parse_mode= 'Markdown' 
-            )
-            await mostrar_menu(update, context); 
+    if validar_telefone(telefone):
+        bd_temp["telefone"] = telefone
 
-        else:
-            await update.message.reply_text(f"Ops! O telefone {telefone_digitado} é inválido. Por favor, digite como no seguinte exemplo:*84123456789*.", parse_mode= 'Markdown')
-"""
+        keyboard = [
+            [KeyboardButton("Sim")],
+            [KeyboardButton("Não quero responder")]
+        ]
+        reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+        await update.message.reply_text("Seu cadastro está praticamente concluído. Tenho as últimas 3 perguntas que são opcionais, mas se você responder já vai adiantar boa parte da sua consulta com seu médico.")
+        await update.message.reply_text("São elas: \n" \
+        "🤒*Você possui alguma doença?*\n" \
+        "💊*Você toma algum remédio todos os dias?*\n" \
+        "⚠️*Você possui alguma alergia?*\n\n" \
+        "Deseja respondê-las?")
+        return perguntas_opcionais
 
+    else:
+        await update.message.reply_text(f"Ops! O telefone {telefone} é inválido. Por favor, digite como no seguinte exemplo: *84123456789*.", parse_mode= 'Markdown')
+        return telefone_solicitado
+    
+async def receber_doencas(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    bd_temp["doencas"] = update.message.text.strip()
+    await update.message.reply_text("Anotado! Agora me informe, quais remédios você toma diariamente? [Etapa 2/3]")
+    return remedios_solicitado
+
+async def receber_remedios(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    bd_temp["remedios"] = update.message.text.strip()
+    await update.message.reply_text("Entendido! agora me responda a útima pergunta, Você possui alguma alérgia? se sim, quais? [Etapa 3/3]")
+    return alergias_solicitado
+
+async def receber_alergias(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    bd_temp["alergias"] = update.message.text.strip()
+
+    inserir_paciente(**bd_temp)
+    await update.message.reply_text("Cadastro concluído com sucesso! ✅")
+    return await mostrar_menu(update, context)
+
+# --- MENU ---
+async def mostrar_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    keyboard = [
+        [KeyboardButton("Agendar consulta")],
+        [KeyboardButton("Conheça quem é Dr. Heitor Góes")],
+        [KeyboardButton("Contatar Dr. Heitor diretamente")],
+        [KeyboardButton("Tirar dúvidas")],
+        [KeyboardButton("Finalizar atendimento")]
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+    await update.message.reply_text("Escolha uma das opções abaixo:", reply_markup=reply_markup)
+    return Menu_principal
+
+# --- START ---
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    await update.message.reply_text(
+        "Olá, seja muito bem vindo! Espero que esteja tendo um ótimo dia! Me chamo Zara, sou a assistente virtual do Dr. Heitor Góes e estou à sua disposição para ajudar no que precisar. 😊"  
+    )
+    await update.message.reply_text("Para iniciarmos preciso que me informe seu CPF, por favor.")
+    keyboard = [
+        [KeyboardButton("Entrar")],
+        [KeyboardButton("Entrar sem cadastro")],
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+    await update.message.reply_text("Ou se preferir, poderá ter acesso sem cadatro, mas será com funções limitadas. O que você deseja?", reply_markup=reply_markup)
+    return await identificar_cadastro(update, context)
+
+# --- PROCESSAR PERGUNTAS OPCIONAIS ---
+async def receber_perguntas_op(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    opcao = update.message.text
+
+    if opcao == "Sim":
+        await update.message.reply.text("Showw, vamos lá então!\n" \
+        "Qual(is) doença(s) você possui? [Etapa 1/3]")
+        return doencas_solicitado
+    
+    elif opcao == "Não quero responder":
+        bd_temp["doencas"] = ""
+        bd_temp["remedios"] = ""
+        bd_temp["alergias"] = ""
+
+        inserir_paciente(**bd_temp)
+        await update.message.reply_text("Cadastro concuído com sucesso! ✅")
+        return await mostrar_menu(update, context)
+    
+    else: 
+        await update.message.reply_text("Opção inválida! Escolha uma das opções abaixo, por favor")
+        return perguntas_opcionais
+
+# --- PROCESSAR ENTRADA ---
+async def entrada(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    opcao = update.message.text
+
+    if opcao == "Entrar":
+        await update.message.reply_text("Certo, agora me informe seu CPF, por favor")
+        return await identificar_cadastro(update, context)
+    
+    elif opcao == "Entrar sem cadastro":
+        await update.message.reply_text("Em que posso te ajudar hoje?")
+        return await mostrar_menu(update, context)
+    
+    else:
+        await update.message.reply_text("Opção inválida! Escolha uma das opções abaixo, por favor")
+        return await entrada(update, context)
+
+# --- PROCESSAR MENU PRINCIPAL ---
 async def menuopt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     opcao = update.message.text
 
@@ -146,66 +249,149 @@ async def menuopt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             [KeyboardButton("Quinta-feira")],
             [KeyboardButton("Sexta-feira")],
             [KeyboardButton("Sábado")],
+            [KeyboardButton("Voltar ao menu")]
         ]
         reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
         await update.message.reply_text("Ok, para qual dia você prefere marcar sua consulta?", reply_markup=reply_markup)
-        #await update.message.reply_text("Perfeito! Deixarei sua consulta agendada para o dia {dia} às {hora} como você pediu. Até lá 😉)
+        return Agendar_consu
+    
+    elif opcao == "Conheça quem é Dr. Heitor Góes":
+        await update.message.reply_text("O Dr. Heitor Góes é médico clínico geral, formado em 2022, e desde então tem se dedicado a oferecer um atendimento próximo e de confiança. Sua atuação é voltada para entender o paciente como um todo, valorizando a escuta atenta e buscando soluções práticas para cada situação")
+        return Menu_principal
 
-
-    elif opcao == "consulta virtual":
-        await update.message.reply_text("O que você deseja?")
+    elif opcao == "Consulta virtual":
         keyboard = [
             [KeyboardButton("Agendar consulta virtual")],
-            [KeyboardButton("Como funciona a consulta virtual?")]
+            [KeyboardButton("Como funciona a consulta virtual?")],
+            [KeyboardButton("Voltar ao menu")]
         ]
-                   
+        reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+        await update.message.reply_text("No dia e horário marcados, o médico entrará em contato com você pelo Google Meet. A consulta seguirá os mesmos padrões de um atendimento presencial: avaliação dos sintomas, esclarecimento de dúvidas e orientações médicas personalizadas diretamente da chamada de vídeo.", reply_markup=reply_markup)
+        return Consulta_virtual
+    
+    elif opcao == "Contatar Dr. Heitor diretamente":
+        await update.message.reply_text(
+            "Você pode entrar em contato diretamente pelo telefone:(84)9702-8081\n"
+            "ou pode enviar um email: heitorgoes@gmail.com"
+        )
+        return Menu_principal
+
     elif opcao == "Tirar dúvidas":
-        await update.message.reply_text("Qual seria sua Dúvida?")
         keyboard = [
-         [KeyboardButton("Aceita plano de saúde?")],
-         [KeyboardButton("Horários de funcionamento")],
-         [KeyboardButton("Valores das consultas")],
-         [KeyboardButton("Retorno")],
-         [KeyboardButton("como é feita a consulta online")]
+            [KeyboardButton("Aceita plano de saúde?")],
+            [KeyboardButton("Horários de funcionamento")],
+            [KeyboardButton("Valores das consultas")],
+            [KeyboardButton("O valor da consulta é com retorno?")],
+            [KeyboardButton("Como é feita a consulta virtual")],
+            [KeyboardButton("Voltar ao menu")]
         ]
-        if opcao == 'Aceita plano de saúde?':
-            await update.message.reply_text("Sim! Nós aceitamos plano de saúde")
-        if opcao == "Horários de funcionamento":
-            await update.message.reply_text("Irei te enviar os horários, aproveite para vir nos fazer uma visita.")
-            await update.message.reply_text(
-                "Segunda-feira: 08:00 às 12:00 e das 14:00 às 18:00\n"
-                "Terça-feira: 08:00 às 12:00 e das 14:00 às 18:00\n"
-                "Quarta-feira: 08:00 às 12:00 e das 14:00 às 18:00\n"
-                "Quinta-feira: 08:00 às 12:00 e das 14:00 às 18:00\n"
-                "Sexta-feira: 08:00 às 12:00 e das 14:00 às 18:00\n"
-                "Sábado: 08:00 às 11:00\n"
-                "Domingo: Não atendemos"
-            )
+        reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+        await update.message.reply_text("Qual seria sua dúvida?", reply_markup=reply_markup)
+        return Duvidas
+    
+    elif opcao == "Finalizar atendimento":
+        await update.message.reply_text("Obrigado pelo contato! 😊 Se precisar de algo mais, é só me chamar. Cuide-se! 💙")
+        return ConversationHandler.END
+
     else:
         await update.message.reply_text("Opção inválida. Por favor, escolha uma opção do menu 😉")
-        return "tirar duvidas"
-    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+        return await mostrar_menu(update, context)
 
+# --- Processar agendamento ---
+async def processar_agendamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    opcao = update.message.text
+    dia = update.message.text
 
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.message.reply_text("Atendimento cancelado. Digite /start se quiser começar novamente.")
-    return ConversationHandler.END
+    if opcao == "Voltar ao menu":
+        await update.message.reply_text("Ok")
+        return await mostrar_menu(update, context)
 
+    await update.message.reply_text(
+        f"Ótimo! Você escolheu {dia}. Em breve entraremos em contato para confirmar os horários disponíveis"
+    )
+    return await mostrar_menu(update, context)
 
-# ---- Faz o bot rodar ----
-async def main():
-    if __name__ == '__main__':
-        app = ApplicationBuilder().token("").build()
+# --- Processar consulta virtual ---
+async def processar_consv(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    opcao = update.message.text
 
-        conv_handler = ConversationHandler(
-            entry_points=[CommandHandler("start", start)],
-            states={
-                menu_principal: [MessageHandler(filters.TEXT & ~filters.COMMAND, menuopt)],
-            },
-            fallbacks=[CommandHandler("cancel", cancel)],
+    if opcao == "Voltar ao menu":
+        await update.message.reply_text("Ok")
+        return await mostrar_menu(update, context)
+
+    if opcao == "Agendar consulta virtual":
+        return await menuopt(update, context)
+    
+    elif opcao == "Como funciona a consulta virtual?":
+        await update.message.reply_text(
+            "A consulta virtual é realizada por videochamada, com a mesma qualidade de atendimento presencial.\n"
+            "Você receberá um link de acesso no horário agendado."
         )
+    else:
+        await update.message.reply_text("Opção inválida. Por favor, escolha uma opção do menu.")
+        return Consulta_virtual
 
-        app.add_handler(conv_handler)
+    return Menu_principal
 
-        print("Bot rodando e aguardando mensagens no Telegram...")
-        app.run_polling(allowed_updates=Update.ALL_TYPES)
+# --- processar duvidas ---
+async def processar_duvidas(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    opcao = update.message.text
+    
+    respostas = {
+        "Aceita plano de saúde?": "Sim, aceitamos os principais planos de saúde. Entre em contato para confirmar se aceitamos o seu.",
+
+        "Horários de funcionamento": "Atendemos de Segunda a Sexta, das 08h às 18h, e aos Sábados das 08h às 12h.",
+        
+        "Valores das consultas": "Os valores variam de acordo com o tipo de consulta. Entre em contato para mais informações.",
+
+        "O valor da consulta é com retorno?": "Consultas de retorno têm valor diferenciado quando realizadas em até 30 dias após a consulta inicial.",
+
+        "Como é feita a consulta virtual": "A consulta virtual é feita por videochamada através de plataforma segura. Você receberá o link no momento do agendamento.",
+
+        "Voltar ao menu": "Ok"
+    }
+    if opcao in respostas:
+        await update.message.reply_text(f"{respostas[opcao]}")
+        if opcao == "Voltar ao menu":
+            return await mostrar_menu(update, context)
+    
+    else:
+        await update.message.reply_text("Opção inválida. Por favor, escolha uma opção do menu.")
+        return Duvidas
+    return Duvidas
+    
+# --- Comando menu ---
+async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    return await mostrar_menu(update, context)
+
+# --- RODAR BOT ---
+def main():
+    app = ApplicationBuilder().token("7555781086:AAEBmqqdACvSLBJvEqiCIF7G9KssTkZRGcs").build()
+
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("start", start)],
+        states={
+            cpf_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, identificar_cadastro)],
+            nome_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_nome)],
+            data_nasc_solicitada: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_data_nasc)],
+            genero_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_genero)],
+            telefone_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_telefone)],
+            perguntas_opcionais: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_perguntas_op)],
+            doencas_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_doencas)],
+            remedios_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_remedios)],
+            alergias_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_alergias)],
+            Menu_principal: [MessageHandler(filters.TEXT & ~filters.COMMAND, menuopt)],
+            Agendar_consu: [MessageHandler(filters.TEXT & ~filters.COMMAND, processar_agendamento)],
+            Consulta_virtual: [MessageHandler(filters.TEXT & ~filters.COMMAND, processar_consv)],
+            Duvidas: [MessageHandler(filters.TEXT & ~filters.COMMAND, processar_duvidas)]
+        },
+        fallbacks=[CommandHandler("menu", menu_command)]
+    )
+
+    app.add_handler(conv_handler)
+
+    print("Bot rodando")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
