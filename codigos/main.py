@@ -12,11 +12,7 @@ import sqlite3
 from database import criar_tabela, inserir_paciente, identificar_cpf
 
 #estados de conversação
-identificar_cadastro = 1
-Menu_principal = 2
-Agendar_consu = 3
-Consulta_virtual = 4
-Duvidas = 5
+cpf_solicitado, nome_solicitado, data_nasc_solicitada, genero_solicitado, telefone_solicitado, perguntas_opcionais, doencas_solicitado, remedios_solicitado, alergias_solicitado, identificar_cadastro_state, processar_entrada, Menu_principal, Agendar_consu, Consulta_virtual, Duvidas = range(15)
 
 #Expressoes regulares para validações
 def validar_cpf(cpf: str) -> bool:
@@ -44,8 +40,6 @@ bd_temp = {
 
 # --- CADASTRO --
 
-cpf_solicitado, nome_solicitado, data_nasc_solicitada, genero_solicitado, telefone_solicitado, perguntas_opcionais, doencas_solicitado, remedios_solicitado, alergias_solicitado, identificar_cadastro, Menu_principal, Agendar_consu, Consulta_virtual, Duvidas = range(14)
-
 async def identificar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cpf = update.message.text.strip()
     
@@ -56,7 +50,7 @@ async def identificar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYP
             nome_completo = paciente[0][1]
             primeiro_nome = nome_completo.split()[0]
             await update.message.reply_text (
-                f"Que bom te ver por aqui,{primeiro_nome}! Em que posso lhe ajudar hoje?")
+                f"Que bom te ver por aqui, {primeiro_nome}😄! Em que posso lhe ajudar hoje?")
             return await mostrar_menu(update,context)
         else:
             bd_temp["cpf"] = cpf
@@ -80,7 +74,7 @@ async def receber_data_nasc(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if validar_data_nasc(data_nasc):
         data_nasc_date = datetime.strptime(data_nasc, "%d/%m/%Y").date()
-        hoje = datetime.date.today()
+        hoje = date.today()
 
         idade = hoje.year - data_nasc_date.year - ((hoje.month, hoje.day) < (data_nasc_date.month, data_nasc_date.day))
         
@@ -95,42 +89,12 @@ async def receber_data_nasc(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return data_nasc_solicitada
     
 async def receber_genero(update: Update,context: ContextTypes.DEFAULT_TYPE) -> int:
-    opcao = update.message.text
-    keyboard = [
-        [KeyboardButton("Masculino")],
-        [KeyboardButton("Feminino")],
-        [KeyboardButton("Outro")],
-        [KeyboardButton("Prefiro não responder")]
-    ]
-    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
-    await update.message.reply_text("Com qual opção você mais se identifica?",reply_markup=reply_markup)
+    genero = update.message.text.strip()
 
-    if opcao == "Masculino":
-        bd_temp["genero"] = "genero"
-        await update.message.reply_text ("Está quase terminando, agora me informe seu *NÚMERO DE TELEFONE*. [Etapa 5/6]", parse_mode= "Markdown")
-        return telefone_solicitado
+    bd_temp["genero"] = genero
+    await update.message.reply_text ("Está quase terminando, agora me informe seu *NÚMERO DE TELEFONE*. [Etapa 5/6]", parse_mode= "Markdown")
+    return telefone_solicitado
 
-    elif opcao == "Feminino":
-        bd_temp["genero"] = "genero"
-        await update.message.reply_text ("Está quase terminando, agora me informe seu *NÚMERO DE TELEFONE*. [Etapa 5/6]", parse_mode= "Markdown")
-        return telefone_solicitado
-    
-    elif opcao == "Outro":
-        await update.message.reply_text("Com qual gênero você se identifica?")
-        genero = update.message.text.strip()
-        bd_temp["genero"] = genero
-        await update.message.reply_text ("Está quase terminando, agora me informe seu *NÚMERO DE TELEFONE*. [Etapa 5/6]", parse_mode= "Markdown")
-        return telefone_solicitado
-
-    elif opcao == "Prefiro não responder":
-        bd_temp["genero"] = "genero"
-        await update.message.reply_text ("Está quase terminando, agora me informe seu *NÚMERO DE TELEFONE*. [Etapa 5/6]", parse_mode= "Markdown")
-        return telefone_solicitado
-
-    else:
-        await update.message.reply_text("Opção inválida! Escolha uma das opções abaixo, por favor")
-        return receber_genero
-    
 async def receber_telefone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telefone = update.message.text.strip()
 
@@ -147,7 +111,7 @@ async def receber_telefone(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🤒*Você possui alguma doença?*\n" \
         "💊*Você toma algum remédio todos os dias?*\n" \
         "⚠️*Você possui alguma alergia?*\n\n" \
-        "Deseja respondê-las?")
+        "Deseja respondê-las?", parse_mode= "Markdown")
         return perguntas_opcionais
 
     else:
@@ -185,7 +149,7 @@ async def mostrar_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     return Menu_principal
 
 # --- START ---
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     await update.message.reply_text(
         "Olá, seja muito bem vindo! Espero que esteja tendo um ótimo dia! Me chamo Zara, sou a assistente virtual do Dr. Heitor Góes e estou à sua disposição para ajudar no que precisar. 😊"  
@@ -197,7 +161,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     await update.message.reply_text("Ou se preferir, poderá ter acesso sem cadatro, mas será com funções limitadas. O que você deseja?", reply_markup=reply_markup)
-    return await identificar_cadastro(update, context)
+    return processar_entrada
+
+# --- PROCESSAR ENTRADA ---
+async def entrada(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    opcao = update.message.text
+
+    if opcao == "Entrar":
+        await update.message.reply_text("Certo, agora me informe seu CPF, por favor")
+        return identificar_cadastro_state
+    
+    elif opcao == "Entrar sem cadastro":
+        await update.message.reply_text("Em que posso te ajudar hoje?")
+        return await mostrar_menu(update, context)
+    
+    else:
+        await update.message.reply_text("Opção inválida! Escolha uma das opções abaixo, por favor")
+        return entrada
 
 # --- PROCESSAR PERGUNTAS OPCIONAIS ---
 async def receber_perguntas_op(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -219,23 +199,7 @@ async def receber_perguntas_op(update: Update, context: ContextTypes.DEFAULT_TYP
     
     else: 
         await update.message.reply_text("Opção inválida! Escolha uma das opções abaixo, por favor")
-        return perguntas_opcionais
-
-# --- PROCESSAR ENTRADA ---
-async def entrada(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    opcao = update.message.text
-
-    if opcao == "Entrar":
-        await update.message.reply_text("Certo, agora me informe seu CPF, por favor")
-        return await identificar_cadastro(update, context)
-    
-    elif opcao == "Entrar sem cadastro":
-        await update.message.reply_text("Em que posso te ajudar hoje?")
-        return await mostrar_menu(update, context)
-    
-    else:
-        await update.message.reply_text("Opção inválida! Escolha uma das opções abaixo, por favor")
-        return await entrada(update, context)
+        return await perguntas_opcionais(update,context)
 
 # --- PROCESSAR MENU PRINCIPAL ---
 async def menuopt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -380,6 +344,8 @@ def main():
             doencas_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_doencas)],
             remedios_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_remedios)],
             alergias_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_alergias)],
+            processar_entrada: [MessageHandler(filters.TEXT & ~filters.COMMAND, entrada)],
+            identificar_cadastro_state: [MessageHandler(filters.TEXT & ~filters.COMMAND, identificar_cadastro)],
             Menu_principal: [MessageHandler(filters.TEXT & ~filters.COMMAND, menuopt)],
             Agendar_consu: [MessageHandler(filters.TEXT & ~filters.COMMAND, processar_agendamento)],
             Consulta_virtual: [MessageHandler(filters.TEXT & ~filters.COMMAND, processar_consv)],
