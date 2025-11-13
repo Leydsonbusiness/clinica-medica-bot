@@ -66,7 +66,7 @@ async def receber_nome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     nome = update.message.text.strip()
 
     bd_temp["nome"] = nome
-    await update.message.reply_text ("Perfeito, acabei de anotar aqui. Agora me diga qual a sua *DATA DE NASCIMENTO*. [Etapa 3/6]", parse_mode= 'Markdown')
+    await update.message.reply_text ("Perfeito, acabei de anotar aqui. Agora me diga qual a sua *DATA DE NASCIMENTO* (use o fomado DD/MM/AAAA). [Etapa 3/6]", parse_mode= 'Markdown')
     return data_nasc_solicitada
 
 async def receber_data_nasc(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -81,32 +81,54 @@ async def receber_data_nasc(update: Update, context: ContextTypes.DEFAULT_TYPE):
         bd_temp["data_nasc"] = data_nasc_date
         bd_temp["idade"] = idade
 
-        await update.message.reply_text (f"Entendi, você tem {idade} anos, certo? Agora preciso que você me informe seu *GÊNERO*. [Etapa 4/6]", parse_mode= 'Markdown')
+        await update.message.reply_text (f"Entendi, você tem {idade} anos, certo?")
         return genero_solicitado
     
     else:
         await update.message.reply_text("Ops, data inválida! Digite no formato DD/MM/AAAA (Lembre-se de colocar as barras)")
         return data_nasc_solicitada
     
-async def receber_genero(update: Update,context: ContextTypes.DEFAULT_TYPE) -> int:
-    genero = update.message.text.strip()
+async def pedir_genero(update: Update,context: ContextTypes.DEFAULT_TYPE) -> int:
+    keyboard = [
+            [KeyboardButton("Masculino")],
+            [KeyboardButton("Feminino")],
+            [KeyboardButton("Outro")],
+            [KeyboardButton("Prefiro não responder")]
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+    await update.message.reply_text("Agora preciso que você me informe seu *GÊNERO*. [Etapa 4/6]", parse_mode= 'Markdown', reply_markup=reply_markup)
+    return genero_solicitado
 
-    bd_temp["genero"] = genero
-    await update.message.reply_text ("Está quase terminando, agora me informe seu *NÚMERO DE TELEFONE*. [Etapa 5/6]", parse_mode= "Markdown")
-    return telefone_solicitado
+# --- PROCESSAR GÊNERO ---
+async def receber_genero(update: Update,context: ContextTypes.DEFAULT_TYPE) -> int:
+    opcao = update.message.text.strip()
+
+    if opcao in["Masculino", "Feminino", "Prefiro não responder"]:
+        bd_temp["genero"] = opcao
+        return telefone_solicitado
+    
+    elif opcao == "Outro":
+        await update.message.reply_text ("Ok, com qual gênero você se identifica?")
+        return genero_personalizado
+
+    else:
+        await update.message.reply_text ("Está quase terminando, agora me informe seu *NÚMERO DE TELEFONE*. [Etapa 5/6]", parse_mode= "Markdown")
+        return telefone_solicitado
+    
+#--- GENERO PERSONALIZADO ---
 
 async def receber_telefone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telefone = update.message.text.strip()
 
     if validar_telefone(telefone):
-        bd_temp["telefone"] = telefone
+        bd_temp["telefone"] = update.message.text.strip()
 
         keyboard = [
             [KeyboardButton("Sim")],
             [KeyboardButton("Não quero responder")]
         ]
         reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
-        await update.message.reply_text("Seu cadastro está praticamente concluído. Tenho as últimas 3 perguntas que são opcionais, mas se você responder já vai adiantar boa parte da sua consulta com seu médico.")
+        await update.message.reply_text("Seu cadastro está praticamente concluído. Tenho as últimas 3 perguntas que são opcionais, mas se você responder já vai adiantar boa parte da sua consulta com seu médico.", reply_markup=reply_markup)
         await update.message.reply_text("São elas: \n" \
         "🤒*Você possui alguma doença?*\n" \
         "💊*Você toma algum remédio todos os dias?*\n" \
@@ -184,14 +206,14 @@ async def receber_perguntas_op(update: Update, context: ContextTypes.DEFAULT_TYP
     opcao = update.message.text
 
     if opcao == "Sim":
-        await update.message.reply.text("Showw, vamos lá então!\n" \
+        await update.message.reply.text("Perfeito! vamos lá então!\n" \
         "Qual(is) doença(s) você possui? [Etapa 1/3]")
         return doencas_solicitado
     
     elif opcao == "Não quero responder":
-        bd_temp["doencas"] = ""
-        bd_temp["remedios"] = ""
-        bd_temp["alergias"] = ""
+        bd_temp["doencas"] = "Não quis responder"
+        bd_temp["remedios"] = "Não quis responder"
+        bd_temp["alergias"] = "Não quis responder"
 
         inserir_paciente(**bd_temp)
         await update.message.reply_text("Cadastro concuído com sucesso! ✅")
@@ -338,7 +360,8 @@ def main():
             cpf_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, identificar_cadastro)],
             nome_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_nome)],
             data_nasc_solicitada: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_data_nasc)],
-            genero_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_genero)],
+            genero_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, pedir_genero)],
+            pedir_genero: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_genero)],
             telefone_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_telefone)],
             perguntas_opcionais: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_perguntas_op)],
             doencas_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_doencas)],
