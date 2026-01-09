@@ -2,19 +2,27 @@
 #python meu_bot.py
 
 #imports
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 import re
+import os 
+from dotenv import load_dotenv
+load_dotenv()
 from datetime import datetime, date
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
+)
 
 #Banco de dados
-import sqlite3
 from database import criar_tabela, inserir_paciente, identificar_cpf
 
-#estados de conversação
-cpf_solicitado, nome_solicitado, data_nasc_solicitada, genero_solicitado, telefone_solicitado, perguntas_opcionais, doencas_solicitado, remedios_solicitado, alergias_solicitado, identificar_cadastro_state, processar_entrada, Menu_principal, Agendar_consu, Consulta_virtual, Duvidas = range(15)
+# ==================== CONFIGURAÇÕES ====================
 
-#Expressoes regulares para validações
+# Estados de conversação
+(
+    PROCESSAR_ENTRADA, CPF, NOME, DATA_NASC, GENERO, GENERO_OUTRO, TELEFONE, PERGUNTAS_OPC, DOENCAS, REMEDIOS, ALERGIAS, MENU, AGENDAR_CONSU, CONSULTA_VIRT, DUVIDAS, ) = range(16)
+
+# ==================== VALIDAÇÕES ====================
+
 def validar_cpf(cpf: str) -> bool:
     cpf = re.sub(r'\D', '', cpf) 
     return bool(re.fullmatch(r'\d{11}', cpf))
@@ -25,6 +33,8 @@ def validar_data_nasc(data_nasc: str) -> bool:
 def validar_telefone(telefone: str) -> bool:
     telefone_brasileiro = r'^\(?(\d{2})\)?\s?(\d{4,5})[-.\s]?(\d{4})$'
     return re.fullmatch(telefone_brasileiro, telefone) is not None
+
+# ==================== BANCO ====================
 
 bd_temp = {
     "nome": None,
@@ -38,36 +48,40 @@ bd_temp = {
     "alergias": None,
 }
 
-# --- CADASTRO --
+# ==================== CADASTRO ====================
 
-async def identificar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def receber_cpf(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cpf = update.message.text.strip()
     
-    if validar_cpf(cpf): 
-        paciente = identificar_cpf(cpf)
-
-        if paciente:
-            nome_completo = paciente[0][1]
-            primeiro_nome = nome_completo.split()[0]
-            await update.message.reply_text (
-                f"Que bom te ver por aqui, {primeiro_nome}😄! Em que posso lhe ajudar hoje?")
-            return await mostrar_menu(update,context)
-        else:
-            bd_temp["cpf"] = cpf
-
-            await update.message.reply_text ("Notei que você não possui cadastro, você vai precisar responder só algumas perguntinhas, vamos lá?😄")
-            await update.message.reply_text ("Me informe seu *NOME COMPLETO*. [etapa 2/6]", parse_mode= 'Markdown')
-            return nome_solicitado
-    else: 
+    if not validar_cpf(cpf):
         await update.message.reply_text (f"Ops! o CPF {cpf} é inválido. Digite apenas 11 números, por favor.")
-        return cpf_solicitado
+        return CPF
+
+    paciente = identificar_cpf(cpf)
+
+    if paciente:
+        nome_completo = paciente[0][1]
+        primeiro_nome = nome_completo.split()[0]
+        await update.message.reply_text (
+            f"Que bom te ver por aqui, {primeiro_nome}😄! Em que posso lhe ajudar hoje?")
+        return await mostrar_menu(update,context)
+    
+    else:
+        bd_temp["cpf"] = cpf
+
+        await update.message.reply_text ("Notei que você não possui cadastro, você vai precisar responder só algumas perguntinhas, vamos lá?😄")
+        await update.message.reply_text ("Me informe seu *NOME COMPLETO*. [etapa 2/6]", parse_mode= 'Markdown')
+        return NOME
+
+# ==================== DATA_NASC ====================
 
 async def receber_nome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     nome = update.message.text.strip()
 
     bd_temp["nome"] = nome
     await update.message.reply_text ("Perfeito, acabei de anotar aqui. Agora me diga qual a sua *DATA DE NASCIMENTO* (use o fomado DD/MM/AAAA). [Etapa 3/6]", parse_mode= 'Markdown')
-    return data_nasc_solicitada
+    return DATA_NASC
+
 
 async def receber_data_nasc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data_nasc = update.message.text.strip()
@@ -82,40 +96,50 @@ async def receber_data_nasc(update: Update, context: ContextTypes.DEFAULT_TYPE):
         bd_temp["idade"] = idade
 
         await update.message.reply_text (f"Entendi, você tem {idade} anos, certo?")
-        return genero_solicitado
+        return GENERO
     
     else:
         await update.message.reply_text("Ops, data inválida! Digite no formato DD/MM/AAAA (Lembre-se de colocar as barras)")
-        return data_nasc_solicitada
+        return DATA_NASC
+    
+# ==================== GENERO ======================
     
 async def pedir_genero(update: Update,context: ContextTypes.DEFAULT_TYPE) -> int:
     keyboard = [
             [KeyboardButton("Masculino")],
             [KeyboardButton("Feminino")],
             [KeyboardButton("Outro")],
-            [KeyboardButton("Prefiro não responder")]
+            [KeyboardButton("Prefiro não responder")],
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     await update.message.reply_text("Agora preciso que você me informe seu *GÊNERO*. [Etapa 4/6]", parse_mode= 'Markdown', reply_markup=reply_markup)
-    return genero_solicitado
+    return GENERO
 
-# --- PROCESSAR GÊNERO ---
+# ==================== GENERO PERSONALIZADO ====================
+
 async def receber_genero(update: Update,context: ContextTypes.DEFAULT_TYPE) -> int:
     opcao = update.message.text.strip()
 
     if opcao in["Masculino", "Feminino", "Prefiro não responder"]:
         bd_temp["genero"] = opcao
-        return telefone_solicitado
+        await update.message.reply_text ("Perfeito! Agora me informe seu *NÚMERO DE TELEFONE*. [ETAPA 5/6]", parse_mode= "Markdown")
+        return TELEFONE
     
     elif opcao == "Outro":
         await update.message.reply_text ("Ok, com qual gênero você se identifica?")
-        return genero_personalizado
+        return GENERO_OUTRO 
 
     else:
-        await update.message.reply_text ("Está quase terminando, agora me informe seu *NÚMERO DE TELEFONE*. [Etapa 5/6]", parse_mode= "Markdown")
-        return telefone_solicitado
+        await update.message.reply_text ("Por favor, escolha uma das opções abaixo.")
+        return GENERO
     
-#--- GENERO PERSONALIZADO ---
+async def receber_genero_pers(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    bd_temp["genero"] = update.message.text.strip()
+
+    await update.message.reply_text ("Perfeito! Agora me informe seu *NÚMERO DE TELEFONE*. [ETAPA 5/6]", parse_mode= "Markdown")
+    return TELEFONE
+
+# ==================== TELEFONE ====================
 
 async def receber_telefone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telefone = update.message.text.strip()
@@ -128,17 +152,24 @@ async def receber_telefone(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [KeyboardButton("Não quero responder")]
         ]
         reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
-        await update.message.reply_text("Seu cadastro está praticamente concluído. Tenho as últimas 3 perguntas que são opcionais, mas se você responder já vai adiantar boa parte da sua consulta com seu médico.", reply_markup=reply_markup)
+        await update.message.reply_text("Seu cadastro está praticamente concluído. Tenho as últimas 3 perguntas que são opcionais, mas se você responder já vai adiantar boa parte da consulta com seu médico.", reply_markup=reply_markup)
         await update.message.reply_text("São elas: \n" \
         "🤒*Você possui alguma doença?*\n" \
         "💊*Você toma algum remédio todos os dias?*\n" \
         "⚠️*Você possui alguma alergia?*\n\n" \
         "Deseja respondê-las?", parse_mode= "Markdown")
-        return perguntas_opcionais
+        return PERGUNTAS_OPC
+    
 
     else:
         await update.message.reply_text(f"Ops! O telefone {telefone} é inválido. Por favor, digite como no seguinte exemplo: *84123456789*.", parse_mode= 'Markdown')
-        return telefone_solicitado
+        return TELEFONE
+    
+async def confirmar_op(update, context):
+    resposta = update.message.text.strip()
+
+    if resposta == "Sim":
+        await update.message.reply_text("Perfeito! Vamos começar ")
     
 async def receber_doencas(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bd_temp["doencas"] = update.message.text.strip()
@@ -170,7 +201,8 @@ async def mostrar_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     await update.message.reply_text("Escolha uma das opções abaixo:", reply_markup=reply_markup)
     return Menu_principal
 
-# --- START ---
+# ==================== START ==================== 
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     await update.message.reply_text(
@@ -182,16 +214,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         [KeyboardButton("Entrar sem cadastro")],
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
-    await update.message.reply_text("Ou se preferir, poderá ter acesso sem cadatro, mas será com funções limitadas. O que você deseja?", reply_markup=reply_markup)
-    return processar_entrada
 
-# --- PROCESSAR ENTRADA ---
-async def entrada(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.message.reply_text("Ou se preferir, poderá ter acesso sem cadatro, mas será com funções limitadas. O que você deseja?", reply_markup=reply_markup)
+    return PROCESSAR_ENTRADA
+
+# =============== PROCESSAR ENTRADA =================
+
+async def processar_entrada(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     opcao = update.message.text
 
     if opcao == "Entrar":
         await update.message.reply_text("Certo, agora me informe seu CPF, por favor")
-        return identificar_cadastro_state
+        return CPF
     
     elif opcao == "Entrar sem cadastro":
         await update.message.reply_text("Em que posso te ajudar hoje?")
@@ -199,7 +233,7 @@ async def entrada(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     
     else:
         await update.message.reply_text("Opção inválida! Escolha uma das opções abaixo, por favor")
-        return entrada
+        return PROCESSAR_ENTRADA
 
 # --- PROCESSAR PERGUNTAS OPCIONAIS ---
 async def receber_perguntas_op(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -350,31 +384,65 @@ async def processar_duvidas(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return await mostrar_menu(update, context)
 
+
+
 # --- RODAR BOT ---
 def main():
-    app = ApplicationBuilder().token("7555781086:AAEBmqqdACvSLBJvEqiCIF7G9KssTkZRGcs").build()
+    token = os.getenv("BOT_TOKEN")
+
+    app = ApplicationBuilder().token(token).build()
 
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
-            cpf_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, identificar_cadastro)],
-            nome_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_nome)],
-            data_nasc_solicitada: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_data_nasc)],
-            genero_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, pedir_genero)],
-            pedir_genero: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_genero)],
-            telefone_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_telefone)],
-            perguntas_opcionais: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_perguntas_op)],
-            doencas_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_doencas)],
-            remedios_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_remedios)],
-            alergias_solicitado: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_alergias)],
-            processar_entrada: [MessageHandler(filters.TEXT & ~filters.COMMAND, entrada)],
-            identificar_cadastro_state: [MessageHandler(filters.TEXT & ~filters.COMMAND, identificar_cadastro)],
-            Menu_principal: [MessageHandler(filters.TEXT & ~filters.COMMAND, menuopt)],
-            Agendar_consu: [MessageHandler(filters.TEXT & ~filters.COMMAND, processar_agendamento)],
-            Consulta_virtual: [MessageHandler(filters.TEXT & ~filters.COMMAND, processar_consv)],
-            Duvidas: [MessageHandler(filters.TEXT & ~filters.COMMAND, processar_duvidas)]
+            PROCESSAR_ENTRADA: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, processar_entrada)
+            ],
+            CPF: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, receber_cpf)
+                ],
+            NOME: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, receber_nome)
+                ],
+            DATA_NASC: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, receber_data_nasc)
+                ],
+            GENERO: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, receber_genero)
+                ],
+            GENERO_OUTRO: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, receber_genero_pers)
+                ],
+            TELEFONE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, receber_telefone)
+                ],
+            PERGUNTAS_OPC: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, confirmar_op)
+                ],
+            DOENCAS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, receber_doencas)
+                ],
+            REMEDIOS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, receber_remedios)
+                ],
+            ALERGIAS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, receber_alergias)
+                ],
+            MENU: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, menuopt)
+                ],
+            AGENDAR_CONSU: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, processar_agendamento)
+                ],
+            CONSULTA_VIRT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, processar_consv)
+                ],
+            DUVIDAS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, processar_duvidas)
+                ]
         },
-        fallbacks=[CommandHandler("menu", menu_command)]
+        fallbacks=[CommandHandler("start", start)]
+        #fallbacks=[CommandHandler("menu", menu_command)]
     )
 
     app.add_handler(conv_handler)
