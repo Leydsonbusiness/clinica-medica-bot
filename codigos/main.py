@@ -7,12 +7,6 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
-
-ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
-load_dotenv(ENV_PATH)
-
-token = os.getenv("BOT_TOKEN")
-
 from datetime import datetime, date
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
@@ -200,6 +194,7 @@ async def confirmar_op(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
         inserir_paciente(**bd_temp)
         await update.message.reply_text("Cadastro concuído com sucesso! ✅")
+        await update.message.reply_text("Seja bem vindo(a) a Clínica Heitor Góes, estarei sempre a sua disposição! 😊")
         return await mostrar_menu(update, context)
     
     else: 
@@ -221,6 +216,7 @@ async def receber_alergias(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     inserir_paciente(**bd_temp)
     await update.message.reply_text("Cadastro concluído com sucesso! ✅")
+    await update.message.reply_text("Seja bem vindo(a) a Clínica Heitor Góes, estarei sempre a sua disposição! 😊")
     return await mostrar_menu(update, context)
 
 # ==================== MENU PRINCIPAL ====================
@@ -270,7 +266,8 @@ async def processar_entrada(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await update.message.reply_text("Opção inválida! Escolha uma das opções abaixo, por favor")
         return PROCESSAR_ENTRADA
 
-# --- PROCESSAR MENU PRINCIPAL ---
+# =============== PROCESSAR MENU PRINCCPAL =================
+
 async def menuopt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     opcao = update.message.text
 
@@ -330,7 +327,8 @@ async def menuopt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         await update.message.reply_text("Opção inválida. Por favor, escolha uma opção do menu 😉")
         return await mostrar_menu(update, context)
 
-# --- Processar agendamento ---
+# =============== PROCESSAR AGENDAMENTO =================
+
 async def processar_agendamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     opcao = update.message.text
     dia = update.message.text
@@ -344,7 +342,8 @@ async def processar_agendamento(update: Update, context: ContextTypes.DEFAULT_TY
     )
     return await mostrar_menu(update, context)
 
-# --- Processar consulta virtual ---
+# =============== PROCESSAR CONSULTA VIRTUAL =================
+
 async def processar_consv(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     opcao = update.message.text
 
@@ -366,7 +365,8 @@ async def processar_consv(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     return MENU
 
-# --- processar duvidas ---
+# =============== PROCESSAR DUVIDAS =================
+
 async def processar_duvidas(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     opcao = update.message.text
     
@@ -392,19 +392,16 @@ async def processar_duvidas(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await update.message.reply_text("Opção inválida. Por favor, escolha uma opção do menu.")
         return DUVIDAS
     return DUVIDAS
-    
-# --- Comando menu ---
-async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    return await mostrar_menu(update, context)
 
+# =============== TOKEN BOT =================
 
-
-# --- RODAR BOT ---
 def main():
     token = os.getenv("BOT_TOKEN")
 
     app = ApplicationBuilder().token(token).build()
     print("TOKEN:", repr(token))
+
+# =============== HANDLERS =================
 
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
