@@ -1,1 +1,1 @@
-#IA para respostas -> provavelmente API OpenAI ou modelo local tipo transformers
+#IA para respostas -> provavelmente API llhama
