@@ -225,8 +225,8 @@ async def mostrar_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     keyboard = [
         [KeyboardButton("Agendar consulta")],
         [KeyboardButton("Conheça quem é Dr. Heitor Góes")],
-        [KeyboardButton("Contatar Dr. Heitor diretamente")],
         [KeyboardButton("Tirar dúvidas")],
+        [KeyboardButton("Contatar Dr. Heitor diretamente")],
         [KeyboardButton("Finalizar atendimento")]
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
