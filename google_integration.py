@@ -26,9 +26,9 @@ creds = service_account.Credentials.from_service_account_file(
 
 service = build("calendar", "v3", credentials=creds)
 
-CONSULTA_MIN = 40
+CONSULTA_MIN = 50
 INTERVALO_MIN = 20
-SLOT_MIN = CONSULTA_MIN + INTERVALO_MIN  # 60
+SLOT_MIN = CONSULTA_MIN + INTERVALO_MIN  #70min consulta total
 
 WORK_WINDOWS = [
     (time(8, 0), time(12, 0)),
@@ -91,7 +91,7 @@ def overlaps(a_start: datetime, a_end: datetime, b_start: datetime, b_end: datet
 
 
 def generate_slots_for_day(day: datetime):
-    """Gera slots fixos do dia com tamanho de 60min (40+20)."""
+    """Gera slots fixos do dia com tamanho de 70min (50+20)."""
     slots = []
     for w_start, w_end in WORK_WINDOWS:
         cur = datetime.combine(day.date(), w_start, tzinfo=TZ)
@@ -117,7 +117,7 @@ def get_free_slots_for_date(date_yyyy_mm_dd: str):
 
     free = []
     for start in slots:
-        end = start + timedelta(minutes=SLOT_MIN)  # checa o slot completo (60)
+        end = start + timedelta(minutes=SLOT_MIN)  # checa o slot completo (70)
         conflict = any(overlaps(start, end, b_start, b_end) for (b_start, b_end) in busy)
         if not conflict:
             free.append(start)
@@ -125,9 +125,9 @@ def get_free_slots_for_date(date_yyyy_mm_dd: str):
     return free
 
 
-def create_appointment(date_yyyy_mm_dd: str, hh_mm: str, patient_name: str, patient_cpf: str | None = None):
+def create_appointment(date_yyyy_mm_dd: str, hh_mm: str, patient_name: str, patient_telefone: str | None = None):
     """
-    Cria evento de consulta (40min) no Calendar.
+    Cria evento de consulta (50min) no Calendar.
     """
     service = get_calendar_service()
 
@@ -135,8 +135,8 @@ def create_appointment(date_yyyy_mm_dd: str, hh_mm: str, patient_name: str, pati
     end_dt = start_dt + timedelta(minutes=CONSULTA_MIN)
 
     desc = []
-    if patient_cpf:
-        desc.append(f"CPF: {patient_cpf}")
+    if patient_telefone:
+        desc.append(f"TELEFONE: {patient_telefone}")
     desc_text = "\n".join(desc) if desc else "Agendado via bot"
 
     event = {

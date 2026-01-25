@@ -14,10 +14,6 @@ from telegram.ext import (
 )
 from google_integration import get_free_slots_for_date, create_appointment
 
-from pathlib import Path
-from dotenv import load_dotenv
-import os
-
 ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 print("ENV_PATH:", ENV_PATH)
 
@@ -33,7 +29,7 @@ from database import criar_tabela, inserir_paciente, identificar_cpf
 
 # Estados de conversação
 (
-    PROCESSAR_ENTRADA, CPF, NOME, DATA_NASC, GENERO, GENERO_OUTRO, TELEFONE, PERGUNTAS_OPC, DOENCAS, REMEDIOS, ALERGIAS, MENU, AGENDAR_CONSU, AGENDAR_HORARIO, CONFIRMAR_AGENDAMENTO, CONSULTA_VIRT, DUVIDAS) = range(17)
+    PROCESSAR_ENTRADA, CPF, NOME, DATA_NASC, GENERO, GENERO_OUTRO, TELEFONE, PERGUNTAS_OPC, DOENCAS, REMEDIOS, ALERGIAS, MENU, AGENDAR_CONSU, AGENDAR_HORARIO, CONFIRMAR_AGENDAMENTO, DUVIDAS) = range(16)
 
 # ==================== VALIDAÇÕES ====================
 
@@ -47,6 +43,15 @@ def validar_data_nasc(data_nasc: str) -> bool:
 def validar_telefone(telefone: str) -> bool:
     telefone_brasileiro = r'^\(?(\d{2})\)?\s?(\d{4,5})[-.\s]?(\d{4})$'
     return re.fullmatch(telefone_brasileiro, telefone) is not None
+
+def primeiro_nome(paciente):
+    if not paciente:
+        return ""
+
+    nome_completo = paciente[0][1]
+    nome = nome_completo.split()[0]
+    return nome
+    
 
 # ==================== BANCO ====================
 
@@ -76,10 +81,11 @@ async def receber_cpf(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     paciente = identificar_cpf(cpf)
 
     if paciente:
-        nome_completo = paciente[0][1]
-        primeiro_nome = nome_completo.split()[0]
+        nome = primeiro_nome(paciente)
+        context.user_data["primeiro_nome"] = nome
+
         await update.message.reply_text (
-            f"Que bom te ver por aqui, {primeiro_nome}😄! Em que posso lhe ajudar hoje?")
+            f"Que bom te ver por aqui, {nome} 😄! Em que posso lhe ajudar hoje?")
         return await mostrar_menu(update,context)
     
     else:
@@ -282,23 +288,16 @@ async def menuopt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     elif opcao == "Conheça quem é Dr. Heitor Góes":
         await update.message.reply_text("O Dr. Heitor Góes é médico clínico geral, formado em 2022, e desde então tem se dedicado a oferecer um atendimento próximo e de confiança. Sua atuação é voltada para entender o paciente como um todo, valorizando a escuta atenta e buscando soluções práticas para cada situação")
         return MENU
-
-    elif opcao == "Consulta virtual":
-        keyboard = [
-            [KeyboardButton("Agendar consulta virtual")],
-            [KeyboardButton("Como funciona a consulta virtual?")],
-            [KeyboardButton("Voltar ao menu")]
-        ]
-        reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
-        await update.message.reply_text("No dia e horário marcados, o médico entrará em contato com você pelo Google Meet. A consulta seguirá os mesmos padrões de um atendimento presencial: avaliação dos sintomas, esclarecimento de dúvidas e orientações médicas personalizadas diretamente da chamada de vídeo.", reply_markup=reply_markup)
-        return CONSULTA_VIRT
     
     elif opcao == "Contatar Dr. Heitor diretamente":
+        nome = context.user_data.get("primeiro_nome", "")
+
         await update.message.reply_text(
-            "Você pode entrar em contato diretamente pelo telefone:(84)9702-8081\n"
-            "ou pode enviar um email: heitorgoes@gmail.com"
+            f"Sem problemas {nome}, irei avisá-lo para entrar em contato com você e assim que puder lhe mandará mensagem.\n\n"
+
+            "Posso te ajudar com algo mais?"
         )
-        return MENU
+        return await mostrar_menu(update, context)
 
     elif opcao == "Tirar dúvidas":
         keyboard = [
@@ -327,23 +326,54 @@ async def processar_agendamento(update: Update, context: ContextTypes.DEFAULT_TY
     texto = update.message.text.strip()
 
     if texto == "Voltar ao menu":
-        await update.message.reply_text("Ok")
+        await update.message.reply_text("Tudo bem 😊")
         return await mostrar_menu(update, context)
     
     if not re.fullmatch(r'^(0[1-9]|[12][0-9]|3[01])/(0[1-9]|1[0-2])/[0-9]{4}$', texto):
-        await update.message.reply_text("Data inválida. Por favor, digite no formato *DD/MM/AAAA* (Lembre-se das barras).", parse_mode="Markdown")
+        await update.message.reply_text("Data inválida. Por favor, digite no formato *DD/MM/AAAA* (Lembre-se das barras).", parse_mode="Markdown") 
         return AGENDAR_CONSU
 
-    # converte pra YYYY-MM-DD (que é o que teu google_integration vai usar)
-    data_iso = datetime.strptime(texto, "%d/%m/%Y").date().isoformat()
-    context.user_data["data_agendamento"] = data_iso
+    # converte pra YYYY-MM-DD e pega a data atual
+    data_escolhida = datetime.strptime(texto, "%d/%m/%Y").date()
+    context.user_data["data_agendamento"] = data_escolhida
+    hoje = date.today()
+    feriados = {date(2026,1,1), date(2026,2,13), date(2026,2,16), date(2026,2,17), date(2026,2,18), date(2026,5,1), date(2026,9,7), date(2026,10,12), date(2026,11,2), date(2026,11,15), date(2026,11,20), date(2026,12,25),}
+
+    # recusa marcações no mesmo dia e em dias que já passaram
+    if data_escolhida <= hoje:
+        await update.message.reply_text(
+            f"Poxa 😕, não encontrei horários disponíveis para *{texto}*.\n"
+            "Por favor, tente outra data",
+            parse_mode="Markdown"
+        )
+        return AGENDAR_CONSU
+
+    # recusa finais de semana 
+    elif data_escolhida.weekday() >= 5:
+        await update.message.reply_text(
+            f"Não atendemos em finais de semana! Por favor, escolha um dia de segunda a sexta 😊",
+            parse_mode="Markdown"
+        )
+        return AGENDAR_CONSU
+    
+    # recusa feriados brasileiros
+    elif data_escolhida in feriados:
+        await update.message.reply_text(
+            f"Pelo que eu vi aqui *{texto}* cai em um feriado.\n"
+            "Por favor, escolha outra data 😊",
+            parse_mode="Markdown"
+        )
+        return AGENDAR_CONSU
+    
+    data_escolhida_2 = datetime.strptime(texto, "%d/%m/%Y").date().isoformat()
+    context.user_data["data_agendamento"] = data_escolhida_2
 
     # busca horários livres no Google Calendar
-    slots = get_free_slots_for_date(data_iso)  # lista de datetime
+    slots = get_free_slots_for_date(data_escolhida_2)  # lista de datetime
     if not slots:
         await update.message.reply_text(
             f"Poxa 😕 não encontrei horários disponíveis para *{texto}*.\n"
-            "Você pode tentar outra data.",
+            "Por favor, tente outra data",
             parse_mode="Markdown"
         )
         return AGENDAR_CONSU
@@ -368,6 +398,7 @@ async def escolher_horario(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     horario = update.message.text.strip()
 
     if horario == "Voltar ao menu":
+        await update.message.reply_text("Tudo bem 😊")
         return await mostrar_menu(update, context)
 
     disponiveis = context.user_data.get("horarios_disponiveis", [])
@@ -380,11 +411,11 @@ async def escolher_horario(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     keyboard = [[KeyboardButton("Confirmar")], [KeyboardButton("Cancelar")]]
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
 
-    data_iso = context.user_data["data_agendamento"]
-    data_br = datetime.fromisoformat(data_iso).strftime("%d/%m/%Y")
+    data_escolhida = context.user_data["data_agendamento"]
+    data_br = datetime.fromisoformat(data_escolhida).strftime("%d/%m/%Y")
 
     await update.message.reply_text(
-        f"Confirmar consulta em *{data_br}* às *{horario}*?",
+        f"Posso confirmar sua consulta em *{data_br}* às *{horario}*?",
         parse_mode="Markdown",
         reply_markup=reply_markup
     )
@@ -414,41 +445,21 @@ async def confirmar_agendamento(update: Update, context: ContextTypes.DEFAULT_TY
         return ConversationHandler.END
 
     nome_completo = paciente[0][1]  
+    telefone = paciente[0][5]
 
-    data_iso = context.user_data["data_agendamento"]
+    data_escolhida = context.user_data["data_agendamento"]
     horario = context.user_data["horario_agendamento"]
 
     # cria evento no Calendar
-    create_appointment(data_iso, horario, patient_name=nome_completo, patient_cpf=cpf)
+    create_appointment(data_escolhida, horario, patient_name=nome_completo, patient_telefone=telefone)
 
-    data_br = datetime.fromisoformat(data_iso).strftime("%d/%m/%Y")
+    data_br = datetime.fromisoformat(data_escolhida).strftime("%d/%m/%Y")
+    nome = context.user_data.get("primeiro_nome", "")
+
     await update.message.reply_text(
-        f"Agendado com sucesso ✅\n📅 {data_br} às {horario}\nAté lá! 😊"
+        f"Perfeito {nome}! Agendado com sucesso ✅\n📅 {data_br} às {horario}\nAté lá! 😊"
     )
     return await mostrar_menu(update, context)
-
-# =============== PROCESSAR CONSULTA VIRTUAL =================
-
-async def processar_consv(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    opcao = update.message.text
-
-    if opcao == "Voltar ao menu":
-        await update.message.reply_text("Ok")
-        return await mostrar_menu(update, context)
-
-    if opcao == "Agendar consulta virtual":
-        return await menuopt(update, context)
-    
-    elif opcao == "Como funciona a consulta virtual?":
-        await update.message.reply_text(
-            "A consulta virtual é realizada por videochamada, com a mesma qualidade de atendimento presencial.\n"
-            "Você receberá um link de acesso no horário agendado."
-        )
-    else:
-        await update.message.reply_text("Opção inválida. Por favor, escolha uma opção do menu.")
-        return CONSULTA_VIRT
-
-    return MENU
 
 # =============== PROCESSAR DUVIDAS =================
 
@@ -464,9 +475,9 @@ async def processar_duvidas(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
         "O valor da consulta é com retorno?": "Consultas de retorno têm valor diferenciado quando realizadas em até 30 dias após a consulta inicial.",
 
-        "Como é feita a consulta virtual": "A consulta virtual é feita por videochamada através de plataforma segura. Você receberá o link no momento do agendamento.",
+        "Como é feita a consulta virtual": "Minutos antes da sua consulta Dr. Heitor entrará em contato com você pelo Whatsapp. A consulta seguirá os mesmos padrões de um atendimento presencial: avaliação dos sintomas, esclarecimento de dúvidas e orientações médicas personalizadas diretamente da chamada de vídeo..",
 
-        "Voltar ao menu": "Ok"
+        "Voltar ao menu": "Tudo bem 😊"
     }
     if opcao in respostas:
         await update.message.reply_text(f"{respostas[opcao]}")
@@ -533,9 +544,6 @@ def main():
                 AGENDAR_HORARIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, escolher_horario)
                 ],
                 CONFIRMAR_AGENDAMENTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, confirmar_agendamento)
-                ],
-            CONSULTA_VIRT: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, processar_consv)
                 ],
             DUVIDAS: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, processar_duvidas)
