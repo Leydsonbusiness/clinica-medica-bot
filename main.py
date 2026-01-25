@@ -12,6 +12,7 @@ from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 )
+from google_integration import get_free_slots_for_date, create_appointment
 
 from pathlib import Path
 from dotenv import load_dotenv
@@ -32,7 +33,7 @@ from database import criar_tabela, inserir_paciente, identificar_cpf
 
 # Estados de conversação
 (
-    PROCESSAR_ENTRADA, CPF, NOME, DATA_NASC, GENERO, GENERO_OUTRO, TELEFONE, PERGUNTAS_OPC, DOENCAS, REMEDIOS, ALERGIAS, MENU, AGENDAR_CONSU, CONSULTA_VIRT, DUVIDAS) = range(15)
+    PROCESSAR_ENTRADA, CPF, NOME, DATA_NASC, GENERO, GENERO_OUTRO, TELEFONE, PERGUNTAS_OPC, DOENCAS, REMEDIOS, ALERGIAS, MENU, AGENDAR_CONSU, AGENDAR_HORARIO, CONFIRMAR_AGENDAMENTO, CONSULTA_VIRT, DUVIDAS) = range(17)
 
 # ==================== VALIDAÇÕES ====================
 
@@ -69,6 +70,8 @@ async def receber_cpf(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     if not validar_cpf(cpf):
         await update.message.reply_text (f"Ops! o CPF {cpf} é inválido. Digite apenas 11 números, por favor.")
         return CPF
+    
+    context.user_data["cpf"] = cpf
 
     paciente = identificar_cpf(cpf)
 
@@ -272,17 +275,8 @@ async def menuopt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     opcao = update.message.text
 
     if opcao == "Agendar consulta":
-        keyboard = [
-            [KeyboardButton("Segunda-feira")],
-            [KeyboardButton("Terça-feira")],
-            [KeyboardButton("Quarta-feira")],
-            [KeyboardButton("Quinta-feira")],
-            [KeyboardButton("Sexta-feira")],
-            [KeyboardButton("Sábado")],
-            [KeyboardButton("Voltar ao menu")]
-        ]
-        reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
-        await update.message.reply_text("Ok, para qual dia você prefere marcar sua consulta?", reply_markup=reply_markup)
+        await update.message.reply_text("Ok, para qual dia você quer marcar sua consulta?📅\n " \
+        "Digite no formato *DD/MM/AAAA* (ex: 25/01/2026).", parse_mode="Markdown")
         return AGENDAR_CONSU
     
     elif opcao == "Conheça quem é Dr. Heitor Góes":
@@ -330,15 +324,106 @@ async def menuopt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 # =============== PROCESSAR AGENDAMENTO =================
 
 async def processar_agendamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    opcao = update.message.text
-    dia = update.message.text
+    texto = update.message.text.strip()
 
-    if opcao == "Voltar ao menu":
+    if texto == "Voltar ao menu":
         await update.message.reply_text("Ok")
         return await mostrar_menu(update, context)
+    
+    if not re.fullmatch(r'^(0[1-9]|[12][0-9]|3[01])/(0[1-9]|1[0-2])/[0-9]{4}$', texto):
+        await update.message.reply_text("Data inválida. Por favor, digite no formato *DD/MM/AAAA* (Lembre-se das barras).", parse_mode="Markdown")
+        return AGENDAR_CONSU
+
+    # converte pra YYYY-MM-DD (que é o que teu google_integration vai usar)
+    data_iso = datetime.strptime(texto, "%d/%m/%Y").date().isoformat()
+    context.user_data["data_agendamento"] = data_iso
+
+    # busca horários livres no Google Calendar
+    slots = get_free_slots_for_date(data_iso)  # lista de datetime
+    if not slots:
+        await update.message.reply_text(
+            f"Poxa 😕 não encontrei horários disponíveis para *{texto}*.\n"
+            "Você pode tentar outra data.",
+            parse_mode="Markdown"
+        )
+        return AGENDAR_CONSU
+
+    horarios = [dt.strftime("%H:%M") for dt in slots]
+    context.user_data["horarios_disponiveis"] = horarios
+
+    keyboard = [[KeyboardButton(h)] for h in horarios]
+    keyboard.append([KeyboardButton("Voltar ao menu")])
+    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
 
     await update.message.reply_text(
-        f"Ótimo! Você escolheu {dia}. Em breve entraremos em contato para confirmar os horários disponíveis"
+        f"Horários disponíveis para *{texto}*:\nEscolha um horário 👇",
+        parse_mode="Markdown",
+        reply_markup=reply_markup
+    )
+    return AGENDAR_HORARIO
+
+# =============== ESCOLHER HORÁRIO =================
+
+async def escolher_horario(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    horario = update.message.text.strip()
+
+    if horario == "Voltar ao menu":
+        return await mostrar_menu(update, context)
+
+    disponiveis = context.user_data.get("horarios_disponiveis", [])
+    if horario not in disponiveis:
+        await update.message.reply_text("Escolhe um horário da lista, por favor 🙂")
+        return AGENDAR_HORARIO
+
+    context.user_data["horario_agendamento"] = horario
+
+    keyboard = [[KeyboardButton("Confirmar")], [KeyboardButton("Cancelar")]]
+    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+
+    data_iso = context.user_data["data_agendamento"]
+    data_br = datetime.fromisoformat(data_iso).strftime("%d/%m/%Y")
+
+    await update.message.reply_text(
+        f"Confirmar consulta em *{data_br}* às *{horario}*?",
+        parse_mode="Markdown",
+        reply_markup=reply_markup
+    )
+    return CONFIRMAR_AGENDAMENTO
+
+# =============== CONFIRMAR AGENDAMENTO =================
+
+async def confirmar_agendamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    opcao = update.message.text.strip()
+
+    if opcao == "Cancelar":
+        await update.message.reply_text("Beleza! Agendamento cancelado ✅")
+        return await mostrar_menu(update, context)
+
+    if opcao != "Confirmar":
+        await update.message.reply_text("Escolha *Confirmar* ou *Cancelar* 🙂", parse_mode="Markdown")
+        return CONFIRMAR_AGENDAMENTO
+
+    cpf = context.user_data.get("cpf")
+    if not cpf:
+        await update.message.reply_text("Pra agendar, preciso que você entre com CPF primeiro. Use /start ✅")
+        return ConversationHandler.END
+
+    paciente = identificar_cpf(cpf)
+    if not paciente:
+        await update.message.reply_text("Não encontrei seu cadastro. Use /start e faça o cadastro rapidinho 🙂")
+        return ConversationHandler.END
+
+    nome_completo = paciente[0][1]  
+
+    data_iso = context.user_data["data_agendamento"]
+    horario = context.user_data["horario_agendamento"]
+
+    # cria evento no Calendar
+    create_appointment(data_iso, horario, patient_name=nome_completo, patient_cpf=cpf)
+
+    data_br = datetime.fromisoformat(data_iso).strftime("%d/%m/%Y")
+    await update.message.reply_text(
+        f"Agendado com sucesso ✅\n📅 {data_br} às {horario}\nAté lá! 😊"
     )
     return await mostrar_menu(update, context)
 
@@ -444,6 +529,10 @@ def main():
                 ],
             AGENDAR_CONSU: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, processar_agendamento)
+                ],
+                AGENDAR_HORARIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, escolher_horario)
+                ],
+                CONFIRMAR_AGENDAMENTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, confirmar_agendamento)
                 ],
             CONSULTA_VIRT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, processar_consv)
