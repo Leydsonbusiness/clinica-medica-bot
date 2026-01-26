@@ -1,1 +1,0 @@
-#IA para respostas -> provavelmente API llhama

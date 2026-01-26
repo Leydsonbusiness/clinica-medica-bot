@@ -15,21 +15,17 @@ from telegram.ext import (
 from google_integration import get_free_slots_for_date, create_appointment
 
 ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
-print("ENV_PATH:", ENV_PATH)
-
-load_dotenv(ENV_PATH)
-
-print("BOT_TOKEN:", repr(os.getenv("BOT_TOKEN")))
-
 
 #Banco de dados
 from database import criar_tabela, inserir_paciente, identificar_cpf
 
 # ==================== CONFIGURAÇÕES ====================
 
+#chat_id medico
+chat_id_medico = int(os.getenv("chat_id_medico"))
 # Estados de conversação
 (
-    PROCESSAR_ENTRADA, CPF, NOME, DATA_NASC, GENERO, GENERO_OUTRO, TELEFONE, PERGUNTAS_OPC, DOENCAS, REMEDIOS, ALERGIAS, MENU, AGENDAR_CONSU, AGENDAR_HORARIO, CONFIRMAR_AGENDAMENTO, DUVIDAS) = range(16)
+    PROCESSAR_ENTRADA, CPF, NOME, DATA_NASC, GENERO, GENERO_OUTRO, TELEFONE, PERGUNTAS_OPC, DOENCAS, REMEDIOS, ALERGIAS, MENU, AGENDAR_CONSU, AGENDAR_HORARIO, CONFIRMAR_AGENDAMENTO, DUVIDAS, MOTIVO_CONT) = range(17)
 
 # ==================== VALIDAÇÕES ====================
 
@@ -167,7 +163,7 @@ async def receber_telefone(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     telefone = update.message.text.strip()
 
     if validar_telefone(telefone):
-        bd_temp["telefone"] = update.message.text.strip()
+        context.user_data["telefone"] = telefone.strip()
 
         keyboard = [
             [KeyboardButton("Sim")],
@@ -293,11 +289,11 @@ async def menuopt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         nome = context.user_data.get("primeiro_nome", "")
 
         await update.message.reply_text(
-            f"Sem problemas {nome}, irei avisá-lo para entrar em contato com você e assim que puder lhe mandará mensagem.\n\n"
+            f"Sem problemas {nome}, vou avisá-lo sim! Mas antes preciso que me informe o motivo para que ele saiba abordar da melhor maneira. \n\n"
 
-            "Posso te ajudar com algo mais?"
+            "Qual o motivo do contato com Dr. Heitor?"
         )
-        return await mostrar_menu(update, context)
+        return MOTIVO_CONT
 
     elif opcao == "Tirar dúvidas":
         keyboard = [
@@ -319,6 +315,37 @@ async def menuopt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     else:
         await update.message.reply_text("Opção inválida. Por favor, escolha uma opção do menu 😉")
         return await mostrar_menu(update, context)
+    
+# =============== PROCESSAR MENSAGEM PARA O MÉDICO =================
+
+async def mnsg_contato(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    motivo_contato = update.message.text.strip()
+    context.user_data["contato"] = motivo_contato
+
+    cpf = context.user_data.get("cpf")
+    if not cpf:
+        await update.message.reply_text("Pra falar com o médico, preciso que você entre com CPF primeiro. Use /start ✅")
+        return ConversationHandler.END
+
+    paciente = identificar_cpf(cpf)
+    if not paciente:
+        await update.message.reply_text("Não encontrei seu cadastro. Use /start e faça o cadastro rapidinho 🙂")
+        return ConversationHandler.END
+    
+    nome_completo = paciente[0][1]  
+    telefone = paciente[0][5]
+
+    await context.bot.send_message(chat_id= chat_id_medico, text=
+    "📣 Olá Heitor, Tem um(a) paciente querendo falar com você! \n"
+    f"Paciente: {nome_completo}\n"
+    f"Telefone: {telefone}\n"
+    f"❗ Motivo: {motivo_contato}")
+
+    await update.message.reply_text("Pronto! Ja avisei o Dr. Heitor e logo logo ele entrará em contato com você. 😉\n\n"
+                                    
+    "Posso te ajudar com algo mais?")
+    return await mostrar_menu(update, context)
+
 
 # =============== PROCESSAR AGENDAMENTO =================
 
@@ -457,7 +484,7 @@ async def confirmar_agendamento(update: Update, context: ContextTypes.DEFAULT_TY
     nome = context.user_data.get("primeiro_nome", "")
 
     await update.message.reply_text(
-        f"Perfeito {nome}! Agendado com sucesso ✅\n📅 {data_br} às {horario}\nAté lá! 😊"
+        f"Perfeito, {nome}! Agendado com sucesso ✅\n📅 {data_br} às {horario}\nAté lá! 😊"
     )
     return await mostrar_menu(update, context)
 
@@ -489,13 +516,26 @@ async def processar_duvidas(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         return DUVIDAS
     return DUVIDAS
 
+# =============== CHAT_ID MEDICO =================
+
+async def medico_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_chat.id
+    user = update.effective_user
+
+    await update.message.reply_text(
+        f"Seu chat_id é: {chat_id}\n"
+        f"Usuário: {user.full_name}"
+        + (f"\nUsername: @{user.username}" if user.username else "")
+    )
+
+
 # =============== TOKEN BOT =================
 
 def main():
     token = os.getenv("BOT_TOKEN")
 
     app = ApplicationBuilder().token(token).build()
-    print("TOKEN:", repr(token))
+
 
 # =============== HANDLERS =================
 
@@ -504,7 +544,7 @@ def main():
         states={
             PROCESSAR_ENTRADA: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, processar_entrada)
-            ],
+                ],
             CPF: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, receber_cpf)
                 ],
@@ -538,12 +578,15 @@ def main():
             MENU: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, menuopt)
                 ],
+            MOTIVO_CONT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, mnsg_contato)
+                ],
             AGENDAR_CONSU: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, processar_agendamento)
                 ],
-                AGENDAR_HORARIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, escolher_horario)
+            AGENDAR_HORARIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, escolher_horario)
                 ],
-                CONFIRMAR_AGENDAMENTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, confirmar_agendamento)
+            CONFIRMAR_AGENDAMENTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, confirmar_agendamento)
                 ],
             DUVIDAS: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, processar_duvidas)
@@ -553,6 +596,7 @@ def main():
         #fallbacks=[CommandHandler("menu", menu_command)]
     )
 
+    app.add_handler(CommandHandler("id", medico_id))
     app.add_handler(conv_handler)
 
     print("Bot rodando")

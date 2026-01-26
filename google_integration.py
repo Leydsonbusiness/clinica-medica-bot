@@ -1,4 +1,4 @@
-#Integração com google agenda(marcar consultas) e google drive(pasta dos pacientes) 
+#Integração com google agenda(marcar consultas)  
 
 # =============== MARCAR CONSULTAS =================
 
@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, time
 from pathlib import Path
 from zoneinfo import ZoneInfo
-from typing import List, Tuple
 
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
