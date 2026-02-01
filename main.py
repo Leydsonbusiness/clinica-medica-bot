@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
-from datetime import datetime, date
+from datetime import datetime, date, time
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
@@ -22,8 +22,9 @@ from database import criar_tabela, inserir_paciente, identificar_cpf
 # ==================== CONFIGURAÇÕES ====================
 
 #chat_id medico
-chat_id_medico = int(os.getenv("chat_id_medico"))
-# Estados de conversação
+Chat_id_medico = int(os.getenv("Chat_id_medico"))
+
+# STATES
 (
     PROCESSAR_ENTRADA, CPF, NOME, DATA_NASC, GENERO, GENERO_OUTRO, TELEFONE, PERGUNTAS_OPC, DOENCAS, REMEDIOS, ALERGIAS, MENU, AGENDAR_CONSU, AGENDAR_HORARIO, CONFIRMAR_AGENDAMENTO, DUVIDAS, MOTIVO_CONT) = range(17)
 
@@ -335,13 +336,13 @@ async def mnsg_contato(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     nome_completo = paciente[0][1]  
     telefone = paciente[0][5]
 
-    await context.bot.send_message(chat_id= chat_id_medico, text=
+    await context.bot.send_message(chat_id= Chat_id_medico, text=
     "📣 Olá Heitor, Tem um(a) paciente querendo falar com você! \n"
     f"Paciente: {nome_completo}\n"
     f"Telefone: {telefone}\n"
-    f"❗ Motivo: {motivo_contato}")
+    f"❗Motivo: {motivo_contato}")
 
-    await update.message.reply_text("Pronto! Ja avisei o Dr. Heitor e logo logo ele entrará em contato com você. 😉\n\n"
+    await update.message.reply_text("Pronto! Ja avisei ao Dr. Heitor e logo logo ele entrará em contato com você. 😉\n\n"
                                     
     "Posso te ajudar com algo mais?")
     return await mostrar_menu(update, context)
@@ -516,6 +517,30 @@ async def processar_duvidas(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         return DUVIDAS
     return DUVIDAS
 
+# =============== MENSSAGEM DIÁRIA PARA O MÉDICO =================
+from daily_job import agenda_daily
+from datetime import time
+
+def setup_jobs(app):
+    app.bot_data["CHAT_ID_MEDICO"] = Chat_id_medico
+
+    # if os.getenv("JOB_TESTE") == 1:
+    app.job_queue.run_repeating(
+    agenda_daily, 
+    interval=30,
+    first=5,
+    name="agenda_teste"
+    )
+        
+    # else:
+    #     app.job_queue.run_daily(
+    #     agenda_daily, 
+    #     time=time(
+    #     hour=7,
+    #     minute=0),
+    #     name="agenda_diaria_medico"
+    # )
+
 # =============== CHAT_ID MEDICO =================
 
 async def medico_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -598,6 +623,7 @@ def main():
 
     app.add_handler(CommandHandler("id", medico_id))
     app.add_handler(conv_handler)
+    setup_jobs(app)
 
     print("Bot rodando")
     app.run_polling()

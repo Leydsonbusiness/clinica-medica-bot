@@ -1,6 +1,8 @@
 venv/
-.venv/
+.vscode/
 .env
 __pycache__/
 *.pyc
 service_account.json
+requirements.txt
+run.ps1

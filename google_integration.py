@@ -19,12 +19,6 @@ SERVICE_ACCOUNT_FILE = "service_account.json"
 TZ = ZoneInfo("America/Fortaleza")
 CALENDAR_ID = "leydsonestudos@gmail.com"
 
-creds = service_account.Credentials.from_service_account_file(
-    SERVICE_ACCOUNT_FILE, scopes=SCOPES
-)
-
-service = build("calendar", "v3", credentials=creds)
-
 CONSULTA_MIN = 50
 INTERVALO_MIN = 20
 SLOT_MIN = CONSULTA_MIN + INTERVALO_MIN  #70min consulta total
@@ -60,7 +54,7 @@ def list_events_in_range(service, start_dt: datetime, end_dt: datetime) -> list:
 
 def get_busy_intervals_for_day(service, day: datetime):
     """Retorna lista de (inicio, fim) ocupados no dia."""
-    start_day = day.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_day = day.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=TZ)
     end_day = start_day + timedelta(days=1)
 
     events = list_events_in_range(service, start_day, end_day)
@@ -147,3 +141,16 @@ def create_appointment(date_yyyy_mm_dd: str, hh_mm: str, patient_name: str, pati
 
     created = service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
     return created  # retorna dict do evento (tem id, htmlLink etc.)
+
+def get_events_for_day(day: datetime) -> list[dict]:
+    service = get_calendar_service()
+
+    if day.tzinfo is None:
+        day = day.replace(tzinfo=TZ)
+    else:
+        day = day.astimezone(TZ)
+
+    start_day = day.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=TZ)
+    end_day = start_day + timedelta(days=1)
+
+    return list_events_in_range(service, start_day, end_day)
