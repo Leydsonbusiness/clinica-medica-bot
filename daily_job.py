@@ -17,7 +17,8 @@ async def agenda_daily(context: ContextTypes.DEFAULT_TYPE):
         "📭 *Agenda de hoje:* sem agendamentos.")
 
     else:
-        lines = ["📋 *Agenda de hoje:*"]
+        lines = ["Bom dia, Dr. Heitor! Espero que tenha tido uma boa noite de sono para encarar mais um dia 😉. \n\n"
+                 "📭 *Agenda de hoje:*"]
         for ev in events:
             if "dateTime" not in ev.get("start", {}) or "dateTime" not in ev.get("end", {}):
                 continue
@@ -28,6 +29,6 @@ async def agenda_daily(context: ContextTypes.DEFAULT_TYPE):
             title = ev.get("summary", "Sem título")
             lines.append(f"• {s.strftime('%H:%M')}–{e.strftime('%H:%M')} — {title}")
         
-        msg = "\n".join(lines) if len(lines) > 1 else print(msg)
+        msg = "\n".join(lines) if len(lines) > 1 else "📭 *Agenda de hoje:* sem agendamentos."
     
     await context.bot.send_message(chat_id = chat_id_medico, text=msg, parse_mode="Markdown")

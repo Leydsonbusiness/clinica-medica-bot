@@ -520,25 +520,26 @@ async def processar_duvidas(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 # =============== MENSSAGEM DIÁRIA PARA O MÉDICO =================
 from daily_job import agenda_daily
 from datetime import time
+from zoneinfo import ZoneInfo
 
 def setup_jobs(app):
     app.bot_data["CHAT_ID_MEDICO"] = Chat_id_medico
 
-    # if os.getenv("JOB_TESTE") == 1:
-    app.job_queue.run_repeating(
+    TZ = ZoneInfo("America/Fortaleza")
+
+    #PRODUÇÃO
+    app.job_queue.run_daily(
     agenda_daily, 
-    interval=30,
-    first=5,
-    name="agenda_teste"
+    time=time(hour=7, minute=0, tzinfo=TZ),
+    name="agenda_diaria_medico"
     )
-        
-    # else:
-    #     app.job_queue.run_daily(
-    #     agenda_daily, 
-    #     time=time(
-    #     hour=7,
-    #     minute=0),
-    #     name="agenda_diaria_medico"
+
+    #TESTE
+    # app.job_queue.run_repeating(
+    # agenda_daily, 
+    # interval=30,
+    # first=5,
+    # name="agenda_teste"
     # )
 
 # =============== CHAT_ID MEDICO =================
