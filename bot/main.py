@@ -4,7 +4,6 @@
 #imports
 import re
 import os 
-from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
 from datetime import datetime, date, time
@@ -13,16 +12,15 @@ from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 )
 from google_integration import get_free_slots_for_date, create_appointment
-
-ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
+from config import BOT_TOKEN, Chat_id_medico
 
 #Banco de dados
-from database import criar_tabela, inserir_paciente, identificar_cpf
+from bot.database.database import criar_tabela, inserir_paciente, identificar_cpf
 
 # ==================== CONFIGURAÇÕES ====================
 
 #chat_id medico
-Chat_id_medico = int(os.getenv("Chat_id_medico"))
+Chat_id_medico = Chat_id_medico
 
 # STATES
 (
@@ -261,11 +259,11 @@ async def processar_entrada(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     opcao = update.message.text
 
     if opcao == "Entrar":
-        await update.message.reply_text("Certo, agora me informe seu CPF, por favor")
+        await update.message.reply_text("Certo, me informe seu CPF, por favor")
         return CPF
     
     elif opcao == "Entrar sem cadastro":
-        await update.message.reply_text("Em que posso te ajudar hoje?")
+        await update.message.reply_text("Tudo bem, em que posso te ajudar hoje?")
         return await mostrar_menu(update, context)
     
     else:
@@ -519,7 +517,7 @@ async def processar_duvidas(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 # =============== MENSSAGEM DIÁRIA PARA O MÉDICO =================
 
-from daily_job import agenda_daily
+from bot.services.daily_job import agenda_daily
 from datetime import time
 from zoneinfo import ZoneInfo
 
@@ -559,7 +557,8 @@ async def medico_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 # =============== TOKEN BOT =================
 
 def main():
-    token = os.getenv("BOT_TOKEN")
+    criar_tabela()
+    token = BOT_TOKEN
 
     app = ApplicationBuilder().token(token).build()
 

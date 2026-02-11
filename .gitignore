@@ -6,3 +6,4 @@ __pycache__/
 service_account.json
 requirements.txt
 run.ps1
+*.db

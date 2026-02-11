@@ -3,21 +3,19 @@
 # =============== MARCAR CONSULTAS =================
 
 from __future__ import annotations
-
 from dataclasses import dataclass
 from datetime import datetime, timedelta, time
 from pathlib import Path
 from zoneinfo import ZoneInfo
-
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
+from config import GOOGLE_CREDENTIALS_FILE, CALENDAR_ID
 
 # =============== CONFIG =================
 
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
-SERVICE_ACCOUNT_FILE = "service_account.json"
 TZ = ZoneInfo("America/Fortaleza")
-CALENDAR_ID = "leydsonestudos@gmail.com"
+
 
 CONSULTA_MIN = 50
 INTERVALO_MIN = 20
@@ -29,9 +27,8 @@ WORK_WINDOWS = [
 ]
 
 def get_calendar_service():
-    """Cria o client do Google Calendar usando service_account.json"""
     base_dir = Path(__file__).resolve().parent
-    json_path = base_dir / SERVICE_ACCOUNT_FILE
+    json_path = base_dir / GOOGLE_CREDENTIALS_FILE
 
     creds = service_account.Credentials.from_service_account_file(
         str(json_path),
@@ -41,7 +38,7 @@ def get_calendar_service():
 
 
 def list_events_in_range(service, start_dt: datetime, end_dt: datetime) -> list:
-    """Lista eventos no intervalo."""
+#Lista eventos no intervalo.
     res = service.events().list(
         calendarId=CALENDAR_ID,
         timeMin=start_dt.isoformat(),
@@ -53,7 +50,7 @@ def list_events_in_range(service, start_dt: datetime, end_dt: datetime) -> list:
 
 
 def get_busy_intervals_for_day(service, day: datetime):
-    """Retorna lista de (inicio, fim) ocupados no dia."""
+#Retorna lista de (inicio, fim) ocupados no dia.
     start_day = day.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=TZ)
     end_day = start_day + timedelta(days=1)
 
@@ -79,12 +76,12 @@ def get_busy_intervals_for_day(service, day: datetime):
 
 
 def overlaps(a_start: datetime, a_end: datetime, b_start: datetime, b_end: datetime) -> bool:
-    """Colisão entre intervalos [a_start,a_end) e [b_start,b_end)."""
+    #Colisão entre intervalos
     return a_start < b_end and b_start < a_end
 
 
 def generate_slots_for_day(day: datetime):
-    """Gera slots fixos do dia com tamanho de 70min (50+20)."""
+    #Gera os slots de 70
     slots = []
     for w_start, w_end in WORK_WINDOWS:
         cur = datetime.combine(day.date(), w_start, tzinfo=TZ)
@@ -119,9 +116,7 @@ def get_free_slots_for_date(date_yyyy_mm_dd: str):
 
 
 def create_appointment(date_yyyy_mm_dd: str, hh_mm: str, patient_name: str, patient_telefone: str | None = None):
-    """
-    Cria evento de consulta (50min) no Calendar.
-    """
+    #por fim, cria evento de consulta (70min) no Calendario do google.
     service = get_calendar_service()
 
     start_dt = datetime.fromisoformat(f"{date_yyyy_mm_dd}T{hh_mm}:00").replace(tzinfo=TZ)
@@ -140,7 +135,7 @@ def create_appointment(date_yyyy_mm_dd: str, hh_mm: str, patient_name: str, pati
     }
 
     created = service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
-    return created  # retorna dict do evento (tem id, htmlLink etc.)
+    return created  # retorna dict do evento
 
 def get_events_for_day(day: datetime) -> list[dict]:
     service = get_calendar_service()

@@ -1,3 +1,5 @@
+#arquivo para lembrete diário de agendamento
+
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from telegram.ext import ContextTypes
