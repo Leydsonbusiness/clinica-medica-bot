@@ -464,7 +464,7 @@ async def confirmar_agendamento(update: Update, context: ContextTypes.DEFAULT_TY
 
     cpf = context.user_data.get("cpf")
     if not cpf:
-        await update.message.reply_text("Pra agendar, preciso que você entre com CPF primeiro. Use /start ✅")
+        await update.message.reply_text("Não encontrei seu cadastro. Use /start e faça o cadastro rapidinho 😉")
         return ConversationHandler.END
 
     paciente = identificar_cpf(cpf)
@@ -497,7 +497,7 @@ async def processar_duvidas(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     respostas = {
         "Aceita plano de saúde?": "Sim, aceitamos os principais planos de saúde. Entre em contato para confirmar se aceitamos o seu.",
 
-        "Horários de funcionamento": "Atendemos de Segunda a Sexta, das 08h às 18h, e aos Sábados das 08h às 12h.",
+        "Horários de funcionamento": "Atendemos de Segunda a Sexta, das 08h às 18h.",
         
         "Valores das consultas": "Os valores variam de acordo com o tipo de consulta. Entre em contato para mais informações.",
 
@@ -518,6 +518,7 @@ async def processar_duvidas(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     return DUVIDAS
 
 # =============== MENSSAGEM DIÁRIA PARA O MÉDICO =================
+
 from daily_job import agenda_daily
 from datetime import time
 from zoneinfo import ZoneInfo
@@ -534,7 +535,7 @@ def setup_jobs(app):
     name="agenda_diaria_medico"
     )
 
-    #TESTE
+    # ===== TESTE =====
     # app.job_queue.run_repeating(
     # agenda_daily, 
     # interval=30,
@@ -619,7 +620,6 @@ def main():
                 ]
         },
         fallbacks=[CommandHandler("start", start)]
-        #fallbacks=[CommandHandler("menu", menu_command)]
     )
 
     app.add_handler(CommandHandler("id", medico_id))
