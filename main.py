@@ -3,7 +3,6 @@
 
 #imports
 import re
-import os 
 from dotenv import load_dotenv
 load_dotenv()
 from datetime import datetime, date, time
@@ -15,7 +14,7 @@ from google_integration import get_free_slots_for_date, create_appointment
 from config import BOT_TOKEN, Chat_id_medico
 
 #Banco de dados
-from bot.database.database import criar_tabela, inserir_paciente, identificar_cpf
+from database import criar_tabela, inserir_paciente, identificar_cpf
 
 # ==================== CONFIGURAÇÕES ====================
 
@@ -163,6 +162,7 @@ async def receber_telefone(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     if validar_telefone(telefone):
         context.user_data["telefone"] = telefone.strip()
+        bd_temp["telefone"] = telefone.strip() # salva telefone no banco temporario 
 
         keyboard = [
             [KeyboardButton("Sim")],
@@ -195,7 +195,7 @@ async def confirmar_op(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         bd_temp["doencas"] = "Não quis responder"
         bd_temp["remedios"] = "Não quis responder"
         bd_temp["alergias"] = "Não quis responder"
-
+        
         inserir_paciente(**bd_temp)
         await update.message.reply_text("Cadastro concuído com sucesso! ✅")
         await update.message.reply_text("Seja bem vindo(a) a Clínica Heitor Góes, estarei sempre a sua disposição! 😊")
@@ -517,7 +517,7 @@ async def processar_duvidas(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 # =============== MENSSAGEM DIÁRIA PARA O MÉDICO =================
 
-from bot.services.daily_job import agenda_daily
+from daily_job import agenda_daily
 from datetime import time
 from zoneinfo import ZoneInfo
 

@@ -4,7 +4,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from telegram.ext import ContextTypes
 
-from google_integration import get_events_for_day
+from google_integration import get_events_for_day # importa função do arquivo do agendamento
 
 TZ = ZoneInfo("America/Fortaleza")
 

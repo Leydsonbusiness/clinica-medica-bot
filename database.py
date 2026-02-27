@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS pacientes(
     cpf VARCHAR(11) UNIQUE NOT NULL,
     data_nasc TEXT NOT NULL,
     genero TEXT,
-    telefone TEXT,
+    telefone INTEGER,
     idade INTEGER,
     doencas TEXT,
     remedios TEXT,
