@@ -3,8 +3,6 @@
 
 #imports
 import re
-from dotenv import load_dotenv
-load_dotenv()
 from datetime import datetime, date, time
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
@@ -95,7 +93,7 @@ async def receber_nome(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     nome = update.message.text.strip()
 
     bd_temp["nome"] = nome
-    await update.message.reply_text ("Perfeito, acabei de anotar aqui. Agora me diga qual a sua *DATA DE NASCIMENTO* (use o fomado DD/MM/AAAA). [Etapa 3/6]", parse_mode= 'Markdown')
+    await update.message.reply_text ("Certo, acabei de anotar aqui. Agora me diga qual a sua *DATA DE NASCIMENTO* (use o fomado DD/MM/AAAA). [Etapa 3/6]", parse_mode= 'Markdown')
     return DATA_NASC
 
 
@@ -323,7 +321,7 @@ async def mnsg_contato(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
     cpf = context.user_data.get("cpf")
     if not cpf:
-        await update.message.reply_text("Pra falar com o médico, preciso que você entre com CPF primeiro. Use /start ✅")
+        await update.message.reply_text("Para conseguir contatar o médico é preciso que você seja cadastrado. Use /start ✅")
         return ConversationHandler.END
 
     paciente = identificar_cpf(cpf)
@@ -412,7 +410,7 @@ async def processar_agendamento(update: Update, context: ContextTypes.DEFAULT_TY
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
 
     await update.message.reply_text(
-        f"Horários disponíveis para *{texto}*:\nEscolha um horário 👇",
+        f"Perfeito, vou ter disponível os seguintes horários para *{texto}*:\nEscolha um horário 👇",
         parse_mode="Markdown",
         reply_markup=reply_markup
     )
@@ -542,6 +540,7 @@ def setup_jobs(app):
     # )
 
 # =============== CHAT_ID MEDICO =================
+# Usado para acessar a conta do médico ou clínica pelo telegram
 
 async def medico_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
@@ -567,6 +566,7 @@ def main():
 
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
+        
         states={
             PROCESSAR_ENTRADA: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, processar_entrada)
