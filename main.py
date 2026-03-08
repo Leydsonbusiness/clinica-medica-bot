@@ -481,7 +481,7 @@ async def confirmar_agendamento(update: Update, context: ContextTypes.DEFAULT_TY
     nome = context.user_data.get("primeiro_nome", "")
 
     await update.message.reply_text(
-        f"Perfeito, {nome}! Agendado com sucesso ✅\n📅 {data_br} às {horario}\nAté lá! 😊"
+        f"Perfeito, Agendado com sucesso ✅\n📅 {data_br} às {horario}\nAté lá! 😊"
     )
     return await mostrar_menu(update, context)
 
