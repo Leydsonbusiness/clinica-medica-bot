@@ -11,7 +11,7 @@ Clínicas médicas gastam muito tempo com tarefas manuais como:
   * Comunicação com o médico
 Este projeto automatiza todo esse fluxo através de um chatbot.
 
-O sistema coleta dados, armazena, processa e agenda consultas automaticamente — funcionando como uma assistente virtual.
+O sistema coleta dados, armazena, processa e agenda consultas automaticamente, funcionando como uma assistente virtual.
 
 3. Principais Funcionalidades:
   3.1. Cadastro completo de pacientes via chat
@@ -80,20 +80,18 @@ CALENDAR_ID=
   7.1 Como Executar Localmente:
     1. Criar ambiente virtual:
     2. python -m venv venv
-    3. Instalar dependências:
+    3. Ativar o ambiente virtual (PowerShell - Windows)
+      .\venv\Scripts\Activate.ps1
+    4. Instalar dependências:
       pip install -r requirements.txt
-    4. Configurar variáveis de ambiente
-    5. Criar .env baseado no .env.example
-    6. Executar o bot
-      python -m bot.main
+    5. Configurar variáveis de ambiente
+    6. Criar .env baseado no .env.example
+    7. Executar o bot
+      python main
 
 8. Status do Projeto:
   * Funcional via Telegram
-  * Migração para WhatsApp em andamento
-  * Planejado deploy em cloud
+  * Possivel migração para WhatsApp
 
 9. Próximos Passos:
-  * Integração com WhatsApp API
-  * Deploy em ambiente cloud
-  * Migração para banco em nuvem
   * Dashboard para clínicas
