@@ -8,11 +8,11 @@ from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 )
-from google_integration import get_free_slots_for_date, create_appointment
-from config import BOT_TOKEN, Chat_id_medico
+from bot.core.google_integration import get_free_slots_for_date, create_appointment
+from bot.core.config import BOT_TOKEN, Chat_id_medico
 
 #Banco de dados
-from database import criar_tabela, inserir_paciente, identificar_cpf
+from bot.database.database import criar_tabela, inserir_paciente, identificar_cpf
 
 # ==================== CONFIGURAÇÕES ====================
 
@@ -478,10 +478,9 @@ async def confirmar_agendamento(update: Update, context: ContextTypes.DEFAULT_TY
     create_appointment(data_escolhida, horario, patient_name=nome_completo, patient_telefone=telefone)
 
     data_br = datetime.fromisoformat(data_escolhida).strftime("%d/%m/%Y")
-    nome = context.user_data.get("primeiro_nome", "")
 
     await update.message.reply_text(
-        f"Perfeito, Agendado com sucesso ✅\n📅 {data_br} às {horario}\nAté lá! 😊"
+        f"Perfeito, Sua consulta foi agendad com sucesso ✅\n📅 {data_br} às {horario}\nAté lá! 😊"
     )
     return await mostrar_menu(update, context)
 
@@ -515,7 +514,7 @@ async def processar_duvidas(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 # =============== MENSSAGEM DIÁRIA PARA O MÉDICO =================
 
-from daily_job import agenda_daily
+from bot.services.daily_job import agenda_daily
 from datetime import time
 from zoneinfo import ZoneInfo
 

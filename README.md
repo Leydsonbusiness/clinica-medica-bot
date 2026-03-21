@@ -87,7 +87,7 @@ CALENDAR_ID=
     5. Configurar variáveis de ambiente
     6. Criar .env baseado no .env.example
     7. Executar o bot
-      python main
+      python -m bot.bot.main
 
 8. Status do Projeto:
   * Funcional via Telegram

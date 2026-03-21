@@ -9,7 +9,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-from config import GOOGLE_CREDENTIALS_FILE, CALENDAR_ID
+from bot.core.config import GOOGLE_CREDENTIALS_FILE, CALENDAR_ID
 
 # =============== CONFIG =================
 
